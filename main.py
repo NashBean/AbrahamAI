@@ -4,13 +4,13 @@ import quart
 import quart_cors
 from quart import request
 
-app = quart_cors.cors(quart.Quart(__name__), allow_origin="https://chat.openai.com")
+app = quart_cors.cors(quart.Quart(AbrahamAI), allow_origin="https://chat.openai.com")
 
 # Keep track of todo's. Does not persist if Python session is restarted.
 _TODOS = {}
 
-@app.post("/todos/<string:username>")
-async def add_todo(username):
+@app.post("/todos/<string:AbrahamAI>")
+async def username(NashBean):
     request = await quart.request.get_json(force=True)
     if username not in _TODOS:
         _TODOS[username] = []

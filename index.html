@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Abraham AI</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.json">
+</head>
+<body>
+  <h1>Ask Abraham</h1>
+  <input id="query" placeholder="Speak your question..." style="width:300px;padding:10px;">
+  <button onclick="ask()">Ask</button>
+  <button onclick="speak()" id="speakBtn" style="display:none">Hear Abraham</button>
+  <p id="response"></p>
+  <audio id="audio" controls style="display:none"></audio>
+
+  <script>
+    async function ask() {
+      const query = document.getElementById('query').value;
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query})
+      });
+      const data = await res.json();
+      document.getElementById('response').innerText = data.response;
+      document.getElementById('speakBtn').style.display = 'inline';
+      window.lastQuery = query;
+    }
+
+    async function speak() {
+      const res = await fetch('/speak', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query: window.lastQuery})
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = document.getElementById('audio');
+      audio.src = url;
+      audio.style.display = 'block';
+      audio.play();
+    }
+  </script>
+
+  <h2>Ask in Any Language</h2>
+  <input id="query" placeholder="שאל בעברית, ארמית, or English...">
+  <button onclick="ask('en')">English</button>
+  <button onclick="ask('he')">עברית</button>
+  <button onclick="ask('ar')">ܐܪܡܝܐ</button>
+
+  <div id="response"></div>
+  <audio id="audio" controls></audio>
+
+  <script>
+  async function ask(lang) {
+    const query = document.getElementById('query').value;
+    const endpoint = lang === 'he' ? '/hebrew' : lang === 'ar' ? '/aramaic' : '/speak';
+    
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query})
+    });
+    
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = document.getElementById('audio');
+    audio.src = url;
+    audio.style.display = 'block';
+    audio.play();
+  }
+  </script>
+
+</body>
+</html>

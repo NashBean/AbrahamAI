@@ -1,0 +1,19 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Abraham AI",
+  "name_for_model": "abraham_ai",
+  "description_for_human": "Consult the wisdom of Biblical Abraham for guidance on faith, journeys, covenants, and life decisions.",
+  "description_for_model": "This plugin responds in the style of Abraham from Genesis, offering thoughtful, faithful advice. Use it for queries on obedience, family, or divine promises.",
+  "auth": {
+    "type": "none"  // Start simple; add API keys later
+  },
+  "api": {
+    "type": "openapi",
+    "url": "http://localhost:5000/openapi.yaml"  // Your backend's spec
+  },
+  "logo_url": "https://your-image-url.com/abraham-icon.png",  // Optional: Upload a simple icon
+  "contact_email": "your-email@example.com",
+  "legal": {
+    "privacy_policy_url": "https://your-site.com/privacy"
+  }
+}

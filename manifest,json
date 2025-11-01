@@ -1,0 +1,9 @@
+{
+  "name": "Abraham AI",
+  "short_name": "Abraham",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4e4bc",
+  "theme_color": "#8b5a2b",
+  "icons": [{"src": "/abraham-icon.png", "sizes": "192x192", "type": "image/png"}]
+}
