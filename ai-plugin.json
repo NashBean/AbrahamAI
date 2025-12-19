@@ -1,19 +1,17 @@
 {
   "schema_version": "v1",
-  "name_for_human": "Abraham AI",
+  "name_for_human": "AbrahamAI",
   "name_for_model": "abraham_ai",
-  "description_for_human": "Consult the wisdom of Biblical Abraham for guidance on faith, journeys, covenants, and life decisions.",
-  "description_for_model": "This plugin responds in the style of Abraham from Genesis, offering thoughtful, faithful advice. Use it for queries on obedience, family, or divine promises.",
+  "description_for_human": "A local plugin that provides AI-powered utilities via your local server.",
+  "description_for_model": "Plugin for AbrahamAI, exposing endpoints for local AI tasks through http://localhost:5004.",
   "auth": {
-    "type": "none"  // Start simple; add API keys later
+    "type": "none"
   },
   "api": {
     "type": "openapi",
-    "url": "http://localhost:5000/openapi.yaml"  // Your backend's spec
+    "url": "http://localhost:5004/openapi.yaml"
   },
-  "logo_url": "https://your-image-url.com/abraham-icon.png",  // Optional: Upload a simple icon
-  "contact_email": "your-email@example.com",
-  "legal": {
-    "privacy_policy_url": "https://your-site.com/privacy"
-  }
+  "logo_url": "http://localhost:5004/logo.png",
+  "contact_email": "you@example.com",
+  "legal_info_url": "http://localhost:5004/legal"
 }

@@ -1,56 +1,56 @@
-import json
+# -*- coding: utf-8 -*-
+from flask import Flask, jsonify, request, send_file
+from flask_cors import CORS
 
-import quart
-import quart_cors
-from quart import request
+app = Flask(__name__)
+CORS(app, origins="https://chat.openai.com")
 
-app = quart_cors.cors(quart.Quart(AbrahamAI), allow_origin="https://chat.openai.com")
-
-# Keep track of todo's. Does not persist if Python session is restarted.
 _TODOS = {}
 
-@app.post("/todos/<string:AbrahamAI>")
-async def username(NashBean):
-    request = await quart.request.get_json(force=True)
+@app.route("/todos/<string:username>", methods=["POST"])
+def add_todo(username):
+    data = request.get_json(force=True)
     if username not in _TODOS:
         _TODOS[username] = []
-    _TODOS[username].append(request["todo"])
-    return quart.Response(response='OK', status=200)
+    _TODOS[username].append(data["todo"])
+    return "OK", 200
 
-@app.get("/todos/<string:username>")
-async def get_todos(username):
-    return quart.Response(response=json.dumps(_TODOS.get(username, [])), status=200)
+@app.route("/todos/<string:username>", methods=["GET"])
+def get_todos(username):
+    return jsonify(_TODOS.get(username, []))
 
-@app.delete("/todos/<string:username>")
-async def delete_todo(username):
-    request = await quart.request.get_json(force=True)
-    todo_idx = request["todo_idx"]
-    # fail silently, it's a simple plugin
-    if 0 <= todo_idx < len(_TODOS[username]):
+@app.route("/todos/<string:username>", methods=["DELETE"])
+def delete_todo(username):
+    data = request.get_json(force=True)
+    todo_idx = data["todo_idx"]
+    if username in _TODOS and 0 <= todo_idx < len(_TODOS[username]):
         _TODOS[username].pop(todo_idx)
-    return quart.Response(response='OK', status=200)
+    return "OK", 200
 
-@app.get("/logo.png")
-async def plugin_logo():
-    filename = 'logo.png'
-    return await quart.send_file(filename, mimetype='image/png')
+@app.route("/abraham", methods=["POST"])
+def abraham():
+    data = request.get_json(force=True)
+    query = data.get("query", "What is faith?")
+    wisdom = ("My child, I am Abraham. The Lord called me out of Ur with only a promise, "
+              "and I went. Concerning '" + query + "' - if God is for you, who can be against you? "
+              "Step forth; the stars bear witness to His faithfulness.")
+    return jsonify({"reply": wisdom})
 
-@app.get("/.well-known/ai-plugin.json")
-async def plugin_manifest():
-    host = request.headers['Host']
-    with open("./.well-known/ai-plugin.json") as f:
+@app.route("/logo.png")
+def plugin_logo():
+    return send_file("logo.png", mimetype="image/png")
+
+@app.route("/.well-known/ai-plugin.json")
+def plugin_manifest():
+    with open(".well-known/ai-plugin.json") as f:
         text = f.read()
-        return quart.Response(text, mimetype="text/json")
+    return text, 200, {"Content-Type": "application/json"}
 
-@app.get("/openapi.yaml")
-async def openapi_spec():
-    host = request.headers['Host']
+@app.route("/openapi.yaml")
+def openapi_spec():
     with open("openapi.yaml") as f:
         text = f.read()
-        return quart.Response(text, mimetype="text/yaml")
-
-def main():
-    app.run(debug=True, host="0.0.0.0", port=5003)
+    return text, 200, {"Content-Type": "text/yaml"}
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=5004, debug=True)
