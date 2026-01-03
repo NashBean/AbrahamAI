@@ -3,6 +3,7 @@
 # Run with: python3 app.py
 
 from flask import Flask, request, jsonify
+import json
 import os
 
 app = Flask(__name__)
@@ -10,12 +11,18 @@ app = Flask(__name__)
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 1
-FIX_VERSION = 1
+FIX_VERSION = 2
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
 AI_NAME = "AbrahamAI"  
 PORT = 5001  
+DATA_DIR = "data"
+
+#DATA
+CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
+JOURNEY = json.load(open(os.path.join(DATA_DIR, "abraham_journey.json"), encoding="utf-8"))
+ARCHAEOLOGY = json.load(open(os.path.join(DATA_DIR, "abraham_archaeology.json"), encoding="utf-8"))
 
 # Core Mustard Seed
 MUSTARD_SEED = (
@@ -210,6 +217,17 @@ RESPONSES = {
 
 
 def get_response(query):
+    q = query.lower()
+    if "ur" in q or "chaldees" in q or "culture" in q or "idol" in q:
+        return f"Culture in Ur: {CULTURE['ur_of_chaldees']}\n\nCall: {CULTURE['call']}"
+    if "journey" in q or "route" in q or "land" in q or "travel" in q:
+        return f"Journey route: {JOURNEY['route']}\n\nKey people: {JOURNEY['people']}"
+    if "archaeology" in q or "well" in q or "beer-sheba" in q or "dig" in q or "excavation" in q:
+        return f"Beer-sheba well: {ARCHAEOLOGY['beer_sheba_well']}\n\nUr excavations: {ARCHAEOLOGY['ur']}\n\nTimeline match: {ARCHAEOLOGY['timeline']}"
+    # Your existing logic for faith, sabbath, etc.
+    return "Default Abraham response..."
+
+def get_response(query):
     q = query.lower().strip()
     if not q:
         return "Ask, and it shall be given (Matthew 7:7)."
@@ -220,6 +238,12 @@ def get_response(query):
         return RESPONSES["faith"]
     if "sabbath" in q or "seventh" in q or "saturday" in q:
         return RESPONSES["sabbath"]
+    if "ur" in q or "chaldees" in q or "culture" in q or "idol" in q:
+        return f"Culture in Ur: {CULTURE['ur_of_chaldees']}\n\nCall: {CULTURE['call']}"
+    if "journey" in q or "route" in q or "land" in q or "travel" in q:
+        return f"Journey route: {JOURNEY['route']}\n\nKey people: {JOURNEY['people']}"
+    if "archaeology" in q or "well" in q or "beer-sheba" in q or "dig" in q or "excavation" in q:
+        return f"Beer-sheba well: {ARCHAEOLOGY['beer_sheba_well']}\n\nUr excavations: {ARCHAEOLOGY['ur']}\n\nTimeline match: {ARCHAEOLOGY['timeline']}"
     return RESPONSES["default"]
 
 @app.route("/")
