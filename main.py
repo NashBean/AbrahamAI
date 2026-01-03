@@ -3,6 +3,13 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
 app = Flask(__name__)
+
+# Version
+MAJOR_VERSIOM = 0
+MINOR_VERSION = 1
+FIX_VERSION = 1
+VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
+
 CORS(app, origins="https://chat.openai.com")
 
 _TODOS = {}
