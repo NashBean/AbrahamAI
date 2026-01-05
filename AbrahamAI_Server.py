@@ -11,14 +11,17 @@ import json
 import os
 import time  # For schedule timer
 import subprocess  # For git pull/restart
+import sys
+import psutil  # For RAM monitoring
 
 app = Flask(__name__)
 
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 1
-FIX_VERSION = 4
+FIX_VERSION = 5
 # Added self-update via GitHub API, research controls, config
+# Added RAM monitoring, fixed imports, self-update
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -35,6 +38,7 @@ KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
 
 #-------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------
+
 
 
 #-------------------------------------------------------------------------------------------------------------
@@ -232,6 +236,68 @@ RESPONSES = {
     }
 #--- added \/ 
 
+# Net research
+def research_topic(topic):
+    if not CONFIG["RESEARCH_ENABLED"]:
+        return "Research disabled."
+    # RAM check
+    if not check_ram_limit():
+        return "RAM limit reached — research skipped."
+    # Your research code...
+    return "Researched info..."
+
+# RAM monitoring
+def check_ram_limit():
+    used_ram_gb = psutil.virtual_memory().used / (1024 ** 3)
+    if used_ram_gb > CONFIG["RAM_LIMIT_GB"]:
+        print(f"RAM usage {used_ram_gb:.2f}GB > limit {CONFIG['RAM_LIMIT_GB']}GB — skipping action.")
+        return False
+    return True
+
+# GitHub self-update
+def check_self_update():
+    if not check_ram_limit():
+        return "RAM limit reached — update skipped."
+    try:
+        owner, repo = CONFIG["GITHUB_REPO"].split("/")
+        url = f"https://api.github.com/repos/{owner}/{repo}/commits/main"
+        headers = {"Authorization": f"Bearer {CONFIG['GITHUB_TOKEN']}"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        head_sha = resp.json()["sha"]
+        base_sha = get_local_sha()
+        if base_sha != head_sha:
+            print("Updates found — pulling...")
+            pull_changes()
+            safe_restart()
+            return "Updated and restarted."
+        return "Up to date."
+    except Exception as e:
+        return f"Update failed: {e}"
+
+def get_local_sha():
+    return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
+
+def pull_changes():
+    subprocess.check_output(["git", "pull"], stderr=subprocess.STDOUT)
+
+def safe_restart():
+    print("Restarting...")
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+# Scheduler thread
+def scheduler():
+    while True:
+        if CONFIG["RESEARCH_SCHEDULE"] == "none":
+            time.sleep(3600)  # Check hourly anyway
+            continue
+        interval = 86400 if CONFIG["RESEARCH_SCHEDULE"] == "daily" else 3600  # hourly
+        check_self_update()
+        time.sleep(interval)
+
+
+# Knowledge file
+KNOWLEDGE_FILE = os.path.join("data", "abraham_comprehensive.json")
+
 # New: Update knowledge and save
 def update_knowledge(key, value):
     global KNOWLEDGE
@@ -243,11 +309,16 @@ def update_knowledge(key, value):
 # Load knowledge (reloadable)
 def load_knowledge():
     if os.path.exists(KNOWLEDGE_FILE):
+        size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
+        if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
+            print("Data size exceeded — skipping update.")
+            return {}
         with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}  # Default empty
 
 KNOWLEDGE = load_knowledge()
+ 
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -397,28 +468,6 @@ def research_topic(topic):
         return f"Research failed: {e}"
 
 
-
-# Your existing main
-def main():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(("0.0.0.0", 5001))
-    server.listen(10)
-    print(f"AbrahamAI Server {VERSION_STRING} running on port 5001...")
-    while True:
-        try:
-            client_sock, addr = server.accept()
-            thread = threading.Thread(target=handle_client, args=(client_sock, addr))
-            thread.start()
-        except KeyboardInterrupt:
-            print("\nShutdown...")
-            break
-
-
-#--- added /\
-
-
-
 def get_response(query):
     q = query.lower()
     if "well" in q:
@@ -450,6 +499,23 @@ def get_response(query):
     if "archaeology" in q or "well" in q or "beer-sheba" in q or "dig" in q or "excavation" in q:
         return f"Beer-sheba well: {ARCHAEOLOGY['beer_sheba_well']}\n\nUr excavations: {ARCHAEOLOGY['ur']}\n\nTimeline match: {ARCHAEOLOGY['timeline']}"
     return RESPONSES["default"]
+
+
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("0.0.0.0", 5001))
+    server.listen(10)
+    print(f"AbrahamAI Server {VERSION_STRING} running on port 5001...")
+    while True:
+        try:
+            client_sock, addr = server.accept()
+            thread = threading.Thread(target=handle_client, args=(client_sock, addr))
+            thread.start()
+        except KeyboardInterrupt:
+            print("\nShutdown...")
+            break
+
 
 @app.route("/")
 def home():

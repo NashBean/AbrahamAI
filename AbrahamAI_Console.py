@@ -5,7 +5,7 @@
 
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 1
-FIX_VERSION = 4
+FIX_VERSION = 2
 # Added self-update via GitHub API, research controls, config
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
