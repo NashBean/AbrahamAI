@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-# app.py - Modular AI Server
-# Run with: python3 app.py
+# AbrahamAI_Server.py - Modular AI Server
+# Run with: python3 AbrahamAI_Server.py
 
+import socket
+import threading
+import requests
 from flask import Flask, request, jsonify
+from bs4 import BeautifulSoup  # For parsing web pages
 import json
 import os
 
@@ -11,8 +15,9 @@ app = Flask(__name__)
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 1
-FIX_VERSION = 2
+FIX_VERSION = 3
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
+# Added self-learning via net research
 
 #AI
 AI_NAME = "AbrahamAI"  
@@ -23,6 +28,15 @@ DATA_DIR = "data"
 CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
 JOURNEY = json.load(open(os.path.join(DATA_DIR, "abraham_journey.json"), encoding="utf-8"))
 ARCHAEOLOGY = json.load(open(os.path.join(DATA_DIR, "abraham_archaeology.json"), encoding="utf-8"))
+KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
+
+#-------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------
+
+
+
+#-------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------
 
 # Core Mustard Seed
 MUSTARD_SEED = (
@@ -214,10 +228,111 @@ RESPONSES = {
         "sabbath": "Genesis 2:2-3 (KJV): And on the seventh day God ended his work which he had made; and he rested on the seventh day from all his work which he had made. And God blessed the seventh day, and sanctified it: because that in it he had rested from all his work which God created and made.\n\nThe Father established the seventh day as holy from creation.",
         "default": "Genesis 22:18 (KJV): And in thy seed shall all the nations of the earth be blessed; because thou hast obeyed my voice.\n\nWhat promise is the Father speaking to you today?"
     }
+#--- added \/ 
+
+# New: Update knowledge and save
+def update_knowledge(key, value):
+    global KNOWLEDGE
+    KNOWLEDGE[key] = value
+    with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
+        json.dump(KNOWLEDGE, f, indent=4)
+    print("Knowledge updated and saved.")
+
+# Load knowledge (reloadable)
+def load_knowledge():
+    if os.path.exists(KNOWLEDGE_FILE):
+        with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}  # Default empty
+
+KNOWLEDGE = load_knowledge()
+
+def handle_client(client_socket, addr):
+    print(f"Connection from {addr}")
+    try:
+        welcome = f"AbrahamAI Server {VERSION_STRING} - Connected!\nType query or 'research [topic]' to learn.\n> "
+        client_socket.send(welcome.encode('utf-8'))
+
+        buffer = ""
+
+        while True:
+            data = client_socket.recv(1024)
+            if not data:
+                break
+            buffer += data.decode('utf-8', errors='ignore')
+
+            while '\n' in buffer:
+                line, buffer = buffer.split('\n', 1)
+                message = line.strip()
+                if not message:
+                    continue
+                if message.lower() == "exit":
+                    client_socket.send("Grace and peace - until next time!\n".encode('utf-8'))
+                    return
+
+                # New: Handle research command
+                if message.lower().startswith("research "):
+                    topic = message[9:].strip()
+                    research_result = research_topic(topic)
+                    update_knowledge(topic, research_result)  # Self-learn
+                    KNOWLEDGE = load_knowledge()  # Reload
+                    resp = f"Researched '{topic}': {research_result}\nKnowledge updated!\n> "
+                else:
+                    resp = f"AbrahamAI: {get_response(message)}\n> "
+
+                client_socket.send(resp.encode('utf-8'))
+    finally:
+        client_socket.close()
+        print(f"Disconnected: {addr}")
+
+
+# New: Net research function
+def research_topic(topic):
+    try:
+        # Example: Wikipedia API for historical info
+        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exintro=&titles={topic.replace(' ', '_')}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        pages = data["query"]["pages"]
+        page_id = list(pages.keys())[0]
+        if page_id != "-1":
+            summary = pages[page_id]["extract"]
+            # Clean HTML
+            soup = BeautifulSoup(summary, 'html.parser')
+            clean_text = soup.get_text()
+            return clean_text
+        return "No research found."
+    except Exception as e:
+        return f"Research failed: {e}"
+
+
+
+# Your existing main
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("0.0.0.0", 5001))
+    server.listen(10)
+    print(f"AbrahamAI Server {VERSION_STRING} running on port 5001...")
+    while True:
+        try:
+            client_sock, addr = server.accept()
+            thread = threading.Thread(target=handle_client, args=(client_sock, addr))
+            thread.start()
+        except KeyboardInterrupt:
+            print("\nShutdown...")
+            break
+
+
+#--- added /\
+
 
 
 def get_response(query):
     q = query.lower()
+    if "well" in q:
+        return KNOWLEDGE.get("archaeology", {}).get("beer_sheba_well", "No info yet")
     if "ur" in q or "chaldees" in q or "culture" in q or "idol" in q:
         return f"Culture in Ur: {CULTURE['ur_of_chaldees']}\n\nCall: {CULTURE['call']}"
     if "journey" in q or "route" in q or "land" in q or "travel" in q:
@@ -262,3 +377,4 @@ def ask():
 if __name__ == "__main__":
     print(f"{AI_NAME} {VERSION_STRING} server running on port {PORT}...")
     app.run(host="0.0.0.0", port=PORT, debug=False)
+    main()
