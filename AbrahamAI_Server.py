@@ -14,6 +14,8 @@ import subprocess  # For git pull/restart
 import sys
 import psutil  # For RAM monitoring
 import logging  # For robust logging
+import smtplib  # For email alerts
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 
@@ -24,6 +26,7 @@ FIX_VERSION = 6
 # Added self-update via GitHub API, research controls, config
 # Added RAM monitoring, fixed imports, self-update
 # Added disk space monitoring, logging system
+# Added network monitoring, alerting system, disk monitoring, logging
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -41,144 +44,6 @@ KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
 #-------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------
 
-
-
-
-# Config file
-CONFIG_FILE = "config.json"
-
-# Load config
-def load_config():
-    try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
-    except Exception as e:
-        logger.error(f"Config load error: {e} — using defaults.")
-    default = {
-        "RESEARCH_ENABLED": False,
-        "DATA_MAX_SIZE_MB": 100,
-        "RAM_LIMIT_GB": 4,
-        "CPU_LIMIT_PERCENT": 80,
-        "DISK_MIN_FREE_GB": 5,  # New: Minimum free disk space
-        "RESEARCH_SCHEDULE": "daily",
-        "GITHUB_REPO": "NashBean/AbrahamAI",
-        "GITHUB_TOKEN": "your_github_pat_here"
-    }
-    save_config(default)
-    return default
-
-def save_config(config=None):
-    try:
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config or CONFIG, f, indent=4)
-    except Exception as e:
-        logger.error(f"Config save error: {e}")
-
-CONFIG = load_config()
-
-# Knowledge file
-KNOWLEDGE_FILE = os.path.join("data", "abraham_comprehensive.json")
-
-# Load knowledge
-def load_knowledge():
-    try:
-        if os.path.exists(KNOWLEDGE_FILE):
-            size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
-            if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
-                logger.warning("Data size exceeded — skipping load.")
-                return {}
-            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception as e:
-        logger.error(f"Knowledge load error: {e}")
-    return {}
-
-KNOWLEDGE = load_knowledge()
-
-# Your get_response
-def get_response(query):
-    q = query.lower()
-    if "well" in q:
-        return KNOWLEDGE.get("archaeology", {}).get("beer_sheba_well", "No info")
-    return "Default response"
-
-# Net research
-def research_topic(topic):
-    if not CONFIG["RESEARCH_ENABLED"]:
-        return "Research disabled."
-    if not check_system_limits():
-        return "System limits reached — research skipped."
-    try:
-        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exintro=&titles={topic.replace(' ', '_')}"
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        pages = data["query"]["pages"]
-        page_id = list(pages.keys())[0]
-        if page_id != "-1":
-            return pages[page_id]["extract"]
-        return "No research found."
-    except Exception as e:
-        logger.error(f"Research error: {e}")
-        return f"Research failed: {e}"
-
-# Update knowledge
-def update_knowledge(key, value):
-    global KNOWLEDGE
-    try:
-        KNOWLEDGE[key] = value
-        with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
-            json.dump(KNOWLEDGE, f, indent=4)
-        logger.info("Knowledge updated.")
-    except Exception as e:
-        logger.error(f"Update knowledge error: {e}")
-
-# System limits check (RAM + CPU + Disk)
-def check_system_limits():
-    # RAM
-    used_ram_gb = psutil.virtual_memory().used / (1024 ** 3)
-    if used_ram_gb > CONFIG["RAM_LIMIT_GB"]:
-        logger.warning(f"RAM {used_ram_gb:.2f}GB > limit {CONFIG['RAM_LIMIT_GB']}GB")
-        return False
-
-    # CPU
-    cpu_percent = psutil.cpu_percent(interval=1)
-    if cpu_percent > CONFIG["CPU_LIMIT_PERCENT"]:
-        logger.warning(f"CPU {cpu_percent}% > limit {CONFIG['CPU_LIMIT_PERCENT']}%")
-        return False
-
-    # Disk (new)
-    disk = psutil.disk_usage('/')
-    free_gb = disk.free / (1024 ** 3)
-    if free_gb < CONFIG["DISK_MIN_FREE_GB"]:
-        logger.warning(f"Free disk {free_gb:.2f}GB < limit {CONFIG['DISK_MIN_FREE_GB']}GB")
-        return False
-
-    return True
-
-# GitHub self-update
-def check_self_update():
-    if not check_system_limits():
-        return "System limits reached — update skipped."
-    try:
-        owner, repo = CONFIG["GITHUB_REPO"].split("/")
-        url = f"https://api.github.com/repos/{owner}/{repo}/commits/main"
-        headers = {"Authorization": f"Bearer {CONFIG['GITHUB_TOKEN']}"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        resp.raise_for_status()
-        head_sha = resp.json()["sha"]
-        base_sha = get_local_sha()
-        if base_sha != head_sha:
-            pull_changes()
-            safe_restart()
-            return "Updated and restarted."
-        return "Up to date."
-    except Exception as e:
-        logger.error(f"Update error: {e}")
-        return f"Update failed: {e}"
-
-# ... rest of code same as before (get_local_sha, pull_changes, safe_restart, scheduler, handle_client, main)
 
 
 #-------------------------------------------------------------------------------------------------------------
@@ -388,45 +253,142 @@ logging.basicConfig(
 )
 logger = logging.getLogger("AbrahamAI")
 
+# Load knowledge
+def load_knowledge():
+    try:
+        if os.path.exists(KNOWLEDGE_FILE):
+            size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
+            if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
+                logger.warning("Data size exceeded — skipping load.")
+                return {}
+            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Knowledge load error: {e}")
+    return {}
+
+KNOWLEDGE = load_knowledge()
+
 # Net research
 def research_topic(topic):
     if not CONFIG["RESEARCH_ENABLED"]:
         return "Research disabled."
-    # RAM check
-    if not check_ram_limit():
-        return "RAM limit reached — research skipped."
-    # Your research code...
-    return "Researched info..."
+    if not check_system_limits():
+        return "System limits reached — research skipped."
+    try:
+        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exintro=&titles={topic.replace(' ', '_')}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        pages = data["query"]["pages"]
+        page_id = list(pages.keys())[0]
+        if page_id != "-1":
+            return pages[page_id]["extract"]
+        return "No research found."
+    except Exception as e:
+        logger.error(f"Research error: {e}")
+        send_alert("Research operation failed")
+        return f"Research failed: {e}"
 
-# RAM monitoring
-def check_ram_limit():
+# System limits check (RAM + CPU + Disk + Net)
+def check_system_limits():
+    # RAM
     used_ram_gb = psutil.virtual_memory().used / (1024 ** 3)
     if used_ram_gb > CONFIG["RAM_LIMIT_GB"]:
-        print(f"RAM usage {used_ram_gb:.2f}GB > limit {CONFIG['RAM_LIMIT_GB']}GB — skipping action.")
+        logger.warning(f"RAM {used_ram_gb:.2f}GB > limit {CONFIG['RAM_LIMIT_GB']}GB")
+        send_alert("RAM limit exceeded")
         return False
+
+    # CPU
+    cpu_percent = psutil.cpu_percent(interval=1)
+    if cpu_percent > CONFIG["CPU_LIMIT_PERCENT"]:
+        logger.warning(f"CPU {cpu_percent}% > limit {CONFIG['CPU_LIMIT_PERCENT']}%")
+        send_alert("CPU limit exceeded")
+        return False
+
+    # Disk
+    disk = psutil.disk_usage('/')
+    free_gb = disk.free / (1024 ** 3)
+    if free_gb < CONFIG["DISK_MIN_FREE_GB"]:
+        logger.warning(f"Free disk {free_gb:.2f}GB < limit {CONFIG['DISK_MIN_FREE_GB']}GB")
+        send_alert("Disk space low")
+        return False
+
+    # Network (new: bandwidth and latency)
+    if not check_network():
+        return False
+
     return True
 
 # GitHub self-update
 def check_self_update():
-    if not check_ram_limit():
-        return "RAM limit reached — update skipped."
+    if not check_system_limits():
+        return "System limits reached — update skipped."
     try:
         owner, repo = CONFIG["GITHUB_REPO"].split("/")
         url = f"https://api.github.com/repos/{owner}/{repo}/commits/main"
         headers = {"Authorization": f"Bearer {CONFIG['GITHUB_TOKEN']}"}
         resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
         head_sha = resp.json()["sha"]
         base_sha = get_local_sha()
         if base_sha != head_sha:
-            print("Updates found — pulling...")
             pull_changes()
             safe_restart()
             return "Updated and restarted."
         return "Up to date."
     except Exception as e:
+        logger.error(f"Update error: {e}")
+        send_alert(f"Self-update failed: {e}")
         return f"Update failed: {e}"
 
-def get_local_sha():
+# Alerting system (email)
+def send_alert(message):
+    try:
+        msg = MIMEText(message)
+        msg["Subject"] = "AbrahamAI Alert"
+        msg["From"] = CONFIG["SMTP_USER"]
+        msg["To"] = CONFIG["ALERT_EMAIL"]
+
+        server = smtplib.SMTP(CONFIG["SMTP_SERVER"], CONFIG["SMTP_PORT"])
+        server.starttls()
+        server.login(CONFIG["SMTP_USER"], CONFIG["SMTP_PASS"])
+        server.sendmail(CONFIG["SMTP_USER"], CONFIG["ALERT_EMAIL"], msg.as_string())
+        server.quit()
+        logger.info("Alert sent.")
+    except Exception as e:
+        logger.error(f"Alert send error: {e}")
+
+# Network monitoring (new)
+def check_network():
+    # Bandwidth (net_io counters over 1 sec)
+    net_start = psutil.net_io_counters()
+    time.sleep(1)
+    net_end = psutil.net_io_counters()
+    bytes_sent = net_end.bytes_sent - net_start.bytes_sent
+    bytes_recv = net_end.bytes_recv - net_start.bytes_recv
+    bandwidth_mbps = ((bytes_sent + bytes_recv) / 1024 / 1024) * 8  # Mbps approximate
+    if bandwidth_mbps < CONFIG["NET_BANDWIDTH_THRESHOLD_MBPS"]:
+        logger.warning(f"Bandwidth {bandwidth_mbps:.2f}Mbps < limit {CONFIG['NET_BANDWIDTH_THRESHOLD_MBPS']}Mbps")
+        send_alert("Low bandwidth detected")
+        return False
+
+    # Latency (ping to Google DNS)
+    try:
+        output = subprocess.check_output(["ping", "-c", "1", "8.8.8.8"]).decode()
+        latency_ms = float(output.split("time=")[1].split(" ms")[0])
+        if latency_ms > CONFIG["NET_LATENCY_MAX_MS"]:
+            logger.warning(f"Latency {latency_ms}ms > limit {CONFIG['NET_LATENCY_MAX_MS']}ms")
+            send_alert("High latency detected")
+            return False
+    except Exception as e:
+        logger.error(f"Latency check error: {e}")
+        send_alert("Network latency check failed")
+        return False
+
+    return True
+
+ef get_local_sha():
     return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
 
 def pull_changes():
@@ -450,55 +412,74 @@ def scheduler():
 # Knowledge file
 KNOWLEDGE_FILE = os.path.join("data", "abraham_comprehensive.json")
 
-# New: Update knowledge and save
+# Update knowledge
 def update_knowledge(key, value):
     global KNOWLEDGE
-    KNOWLEDGE[key] = value
-    with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
-        json.dump(KNOWLEDGE, f, indent=4)
-    print("Knowledge updated and saved.")
+    try:
+        KNOWLEDGE[key] = value
+        with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
+            json.dump(KNOWLEDGE, f, indent=4)
+        logger.info("Knowledge updated.")
+    except Exception as e:
+        logger.error(f"Update knowledge error: {e}")
+        send_alert("Knowledge update failed")
 
-# Load knowledge (reloadable)
+# Load knowledge
 def load_knowledge():
-    if os.path.exists(KNOWLEDGE_FILE):
-        size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
-        if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
-            print("Data size exceeded — skipping update.")
-            return {}
-        with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}  # Default empty
+    try:
+        if os.path.exists(KNOWLEDGE_FILE):
+            size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
+            if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
+                logger.warning("Data size exceeded — skipping load.")
+                send_alert("Data size limit exceeded")
+                return {}
+            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Knowledge load error: {e}")
+        send_alert("Knowledge load failed")
+    return {}
 
 KNOWLEDGE = load_knowledge()
  
-
+# Load config
 def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    return {
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Config load error: {e} — using defaults.")
+    default = {
         "RESEARCH_ENABLED": False,
         "DATA_MAX_SIZE_MB": 100,
         "RAM_LIMIT_GB": 4,
-        "RESEARCH_SCHEDULE": "daily",  # "daily", "hourly", "none"
-        "GITHUB_REPO": "NashBean/AbrahamAI",  # Your repo
-        "GITHUB_TOKEN": "your_github_pat"  # Add your PAT here (scope: repo)
+        "CPU_LIMIT_PERCENT": 80,
+        "DISK_MIN_FREE_GB": 5,  # New: Minimum free disk space
+        "NET_BANDWIDTH_THRESHOLD_MBPS": 1.0,  # New: Min bandwidth for operations
+        "NET_LATENCY_MAX_MS": 200,  # New: Max latency for operations
+        "ALERT_EMAIL": "your_email@example.com",  # New: Email for alerts
+        "SMTP_SERVER": "smtp.example.com",  # New: SMTP for alerting
+        "SMTP_PORT": 587,
+        "SMTP_USER": "user",
+        "SMTP_PASS": "pass",
+        "RESEARCH_SCHEDULE": "daily",
+        "GITHUB_REPO": "NashBean/AbrahamAI",
+        "GITHUB_TOKEN": "your_github_pat_here"
     }
+    save_config(default)
+    return default
+
+def save_config(config=None):
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config or CONFIG, f, indent=4)
+    except Exception as e:
+        logger.error(f"Config save error: {e}")
 
 CONFIG = load_config()
 
-def save_config():
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(CONFIG, f, indent=4)
 
-
-# Existing KNOWLEDGE load (now checks data size)
-def load_knowledge():
-    size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
-    if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
-        print("Data size exceeded — trimming...")
-        # Trim logic (e.g., remove old entries)
-    # Your load code...
 
 # Net research (only if enabled)
 def research_topic(topic):
@@ -687,3 +668,4 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=PORT, debug=False)
     logger.info(f"Starting {AI_NAME}_Server {VERSION_STRING}")
     main()
+
