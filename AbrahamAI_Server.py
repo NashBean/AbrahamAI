@@ -9,20 +9,23 @@ from flask import Flask, request, jsonify
 from bs4 import BeautifulSoup  # For parsing web pages
 import json
 import os
+import time  # For schedule timer
+import subprocess  # For git pull/restart
 
 app = Flask(__name__)
 
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 1
-FIX_VERSION = 3
+FIX_VERSION = 4
+# Added self-update via GitHub API, research controls, config
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
-# Added self-learning via net research
 
 #AI
 AI_NAME = "AbrahamAI"  
 PORT = 5001  
 DATA_DIR = "data"
+CONFIG_FILE = "config.json"
 
 #DATA
 CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
@@ -32,7 +35,6 @@ KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
 
 #-------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------
-
 
 
 #-------------------------------------------------------------------------------------------------------------
@@ -247,8 +249,83 @@ def load_knowledge():
 
 KNOWLEDGE = load_knowledge()
 
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    return {
+        "RESEARCH_ENABLED": False,
+        "DATA_MAX_SIZE_MB": 100,
+        "RAM_LIMIT_GB": 4,
+        "RESEARCH_SCHEDULE": "daily",  # "daily", "hourly", "none"
+        "GITHUB_REPO": "NashBean/AbrahamAI",  # Your repo
+        "GITHUB_TOKEN": "your_github_pat"  # Add your PAT here (scope: repo)
+    }
+
+CONFIG = load_config()
+
+def save_config():
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(CONFIG, f, indent=4)
+
+
+# Existing KNOWLEDGE load (now checks data size)
+def load_knowledge():
+    size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
+    if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
+        print("Data size exceeded — trimming...")
+        # Trim logic (e.g., remove old entries)
+    # Your load code...
+
+# Net research (only if enabled)
+def research_topic(topic):
+    if not CONFIG["RESEARCH_ENABLED"]:
+        return "Research disabled."
+    # Your research code...
+
+# GitHub self-update
+def check_self_update():
+    try:
+        owner, repo = CONFIG["GITHUB_REPO"].split("/")
+        base_sha = get_local_sha()  # Implement: subprocess.run(["git", "rev-parse", "HEAD"])
+        head_sha = get_remote_sha(owner, repo)
+        if base_sha != head_sha:
+            print("Updates available — pulling...")
+            pull_changes()
+            save_local_sha(head_sha)
+            safe_restart()
+            return "Updated to latest version."
+        return "Up to date."
+    except Exception as e:
+        return f"Update failed: {e}"
+
+def get_remote_sha(owner, repo):
+    url = f"https://api.github.com/repos/{owner}/{repo}/git/refs/heads/main"
+    headers = {"Authorization": f"Bearer {CONFIG['GITHUB_TOKEN']}"}
+    resp = requests.get(url, headers=headers)
+    return resp.json()["object"]["sha"]
+
+def pull_changes():
+    subprocess.run(["git", "pull"], check=True)
+
+def safe_restart():
+    print("Restarting safely...")
+    os.execv(sys.executable, [sys.executable] + sys.argv)  # Restart Python process
+
+# Schedule research/update (background thread)
+def scheduler():
+    while True:
+        if CONFIG["RESEARCH_SCHEDULE"] != "none":
+            # Run research or update on schedule
+            print("Scheduled check...")
+            check_self_update()
+        time.sleep(86400 if CONFIG["RESEARCH_SCHEDULE"] == "daily" else 3600)  # 24h or 1h
+
+threading.Thread(target=scheduler, daemon=True).start()
+
 def handle_client(client_socket, addr):
     print(f"Connection from {addr}")
+
     try:
         welcome = f"AbrahamAI Server {VERSION_STRING} - Connected!\nType query or 'research [topic]' to learn.\n> "
         client_socket.send(welcome.encode('utf-8'))
@@ -269,6 +346,19 @@ def handle_client(client_socket, addr):
                 if message.lower() == "exit":
                     client_socket.send("Grace and peace - until next time!\n".encode('utf-8'))
                     return
+                if message.lower().startswith("set "):
+                    parts = message.split()
+                    if len(parts) > 2:
+                        key = parts[1].upper()
+                        value = ' '.join(parts[2:])
+                        if key in CONFIG:
+                            CONFIG[key] = type(CONFIG[key])(value)  # Cast to original type
+                            save_config()
+                            resp = f"Setting {key} updated to {value}\n> "
+                        else:
+                            resp = f"Unknown setting: {key}\n> "
+                        client_socket.send(resp.encode('utf-8'))
+                    continue
 
                 # New: Handle research command
                 if message.lower().startswith("research "):
