@@ -13,15 +13,17 @@ import time  # For schedule timer
 import subprocess  # For git pull/restart
 import sys
 import psutil  # For RAM monitoring
+import logging  # For robust logging
 
 app = Flask(__name__)
 
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 1
-FIX_VERSION = 5
+FIX_VERSION = 6
 # Added self-update via GitHub API, research controls, config
 # Added RAM monitoring, fixed imports, self-update
+# Added disk space monitoring, logging system
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -39,6 +41,144 @@ KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
 #-------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------
 
+
+
+
+# Config file
+CONFIG_FILE = "config.json"
+
+# Load config
+def load_config():
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Config load error: {e} — using defaults.")
+    default = {
+        "RESEARCH_ENABLED": False,
+        "DATA_MAX_SIZE_MB": 100,
+        "RAM_LIMIT_GB": 4,
+        "CPU_LIMIT_PERCENT": 80,
+        "DISK_MIN_FREE_GB": 5,  # New: Minimum free disk space
+        "RESEARCH_SCHEDULE": "daily",
+        "GITHUB_REPO": "NashBean/AbrahamAI",
+        "GITHUB_TOKEN": "your_github_pat_here"
+    }
+    save_config(default)
+    return default
+
+def save_config(config=None):
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config or CONFIG, f, indent=4)
+    except Exception as e:
+        logger.error(f"Config save error: {e}")
+
+CONFIG = load_config()
+
+# Knowledge file
+KNOWLEDGE_FILE = os.path.join("data", "abraham_comprehensive.json")
+
+# Load knowledge
+def load_knowledge():
+    try:
+        if os.path.exists(KNOWLEDGE_FILE):
+            size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
+            if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
+                logger.warning("Data size exceeded — skipping load.")
+                return {}
+            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Knowledge load error: {e}")
+    return {}
+
+KNOWLEDGE = load_knowledge()
+
+# Your get_response
+def get_response(query):
+    q = query.lower()
+    if "well" in q:
+        return KNOWLEDGE.get("archaeology", {}).get("beer_sheba_well", "No info")
+    return "Default response"
+
+# Net research
+def research_topic(topic):
+    if not CONFIG["RESEARCH_ENABLED"]:
+        return "Research disabled."
+    if not check_system_limits():
+        return "System limits reached — research skipped."
+    try:
+        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exintro=&titles={topic.replace(' ', '_')}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        pages = data["query"]["pages"]
+        page_id = list(pages.keys())[0]
+        if page_id != "-1":
+            return pages[page_id]["extract"]
+        return "No research found."
+    except Exception as e:
+        logger.error(f"Research error: {e}")
+        return f"Research failed: {e}"
+
+# Update knowledge
+def update_knowledge(key, value):
+    global KNOWLEDGE
+    try:
+        KNOWLEDGE[key] = value
+        with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
+            json.dump(KNOWLEDGE, f, indent=4)
+        logger.info("Knowledge updated.")
+    except Exception as e:
+        logger.error(f"Update knowledge error: {e}")
+
+# System limits check (RAM + CPU + Disk)
+def check_system_limits():
+    # RAM
+    used_ram_gb = psutil.virtual_memory().used / (1024 ** 3)
+    if used_ram_gb > CONFIG["RAM_LIMIT_GB"]:
+        logger.warning(f"RAM {used_ram_gb:.2f}GB > limit {CONFIG['RAM_LIMIT_GB']}GB")
+        return False
+
+    # CPU
+    cpu_percent = psutil.cpu_percent(interval=1)
+    if cpu_percent > CONFIG["CPU_LIMIT_PERCENT"]:
+        logger.warning(f"CPU {cpu_percent}% > limit {CONFIG['CPU_LIMIT_PERCENT']}%")
+        return False
+
+    # Disk (new)
+    disk = psutil.disk_usage('/')
+    free_gb = disk.free / (1024 ** 3)
+    if free_gb < CONFIG["DISK_MIN_FREE_GB"]:
+        logger.warning(f"Free disk {free_gb:.2f}GB < limit {CONFIG['DISK_MIN_FREE_GB']}GB")
+        return False
+
+    return True
+
+# GitHub self-update
+def check_self_update():
+    if not check_system_limits():
+        return "System limits reached — update skipped."
+    try:
+        owner, repo = CONFIG["GITHUB_REPO"].split("/")
+        url = f"https://api.github.com/repos/{owner}/{repo}/commits/main"
+        headers = {"Authorization": f"Bearer {CONFIG['GITHUB_TOKEN']}"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        head_sha = resp.json()["sha"]
+        base_sha = get_local_sha()
+        if base_sha != head_sha:
+            pull_changes()
+            safe_restart()
+            return "Updated and restarted."
+        return "Up to date."
+    except Exception as e:
+        logger.error(f"Update error: {e}")
+        return f"Update failed: {e}"
+
+# ... rest of code same as before (get_local_sha, pull_changes, safe_restart, scheduler, handle_client, main)
 
 
 #-------------------------------------------------------------------------------------------------------------
@@ -234,7 +374,19 @@ RESPONSES = {
         "sabbath": "Genesis 2:2-3 (KJV): And on the seventh day God ended his work which he had made; and he rested on the seventh day from all his work which he had made. And God blessed the seventh day, and sanctified it: because that in it he had rested from all his work which God created and made.\n\nThe Father established the seventh day as holy from creation.",
         "default": "Genesis 22:18 (KJV): And in thy seed shall all the nations of the earth be blessed; because thou hast obeyed my voice.\n\nWhat promise is the Father speaking to you today?"
     }
+
 #--- added \/ 
+
+# Logging setup (file + console)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("abrahamai.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("AbrahamAI")
 
 # Net research
 def research_topic(topic):
@@ -533,4 +685,5 @@ def ask():
 if __name__ == "__main__":
     print(f"{AI_NAME} {VERSION_STRING} server running on port {PORT}...")
     app.run(host="0.0.0.0", port=PORT, debug=False)
+    logger.info(f"Starting {AI_NAME}_Server {VERSION_STRING}")
     main()
