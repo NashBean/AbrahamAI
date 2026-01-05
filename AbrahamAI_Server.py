@@ -22,7 +22,7 @@ app = Flask(__name__)
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 1
-FIX_VERSION = 6
+FIX_VERSION = 7
 # Added self-update via GitHub API, research controls, config
 # Added RAM monitoring, fixed imports, self-update
 # Added disk space monitoring, logging system
