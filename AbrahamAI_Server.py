@@ -16,13 +16,14 @@ import psutil  # For system monitoring (RAM, CPU, Disk, Net)
 import logging  # For robust logging
 import smtplib  # For email alerts
 from email.mime.text import MIMEText
+from common import *  # Import all from ai-lib
 
 #app = Flask(__name__)
 
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 1
+FIX_VERSION = 2
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -45,9 +46,19 @@ MUSTARD_SEED = DATA["MUSTARD_SEED"]
 PARABLES = DATA["PARABLES"]
 RESPONSES = DATA["RESPONSES"]
 
+data = load_data()
+response = get_response(data, query)
+
 # Load functions as strings and exec (safe in your context)
 exec(DATA["get_response"])
 exec(DATA["self_research"])
+
+# Use
+setup_logging()
+CONFIG = load_config()
+
+if check_system_limits(CONFIG):
+    # Do research...
 
 # Logging setup
 logging.basicConfig(
