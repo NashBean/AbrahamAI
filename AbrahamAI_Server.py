@@ -22,14 +22,17 @@ from email.mime.text import MIMEText
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 0
+FIX_VERSION = 1
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
 AI_NAME = "AbrahamAI"  
 PORT = 5001  
-DATA_DIR = "data"
 CONFIG_FILE = "config.json"
+DATA_DIR = "data"
+DATA_FILE = os.path.join(DATA_DIR, "abraham_data.json")
+    with open(DATA_FILE, "r") as f:
+        DATA = json.load(f)
 
 #DATA
 CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
@@ -37,6 +40,14 @@ JOURNEY = json.load(open(os.path.join(DATA_DIR, "abraham_journey.json"), encodin
 ARCHAEOLOGY = json.load(open(os.path.join(DATA_DIR, "abraham_archaeology.json"), encoding="utf-8"))
 KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
 
+
+MUSTARD_SEED = DATA["MUSTARD_SEED"]
+PARABLES = DATA["PARABLES"]
+RESPONSES = DATA["RESPONSES"]
+
+# Load functions as strings and exec (safe in your context)
+exec(DATA["get_response"])
+exec(DATA["self_research"])
 
 # Logging setup
 logging.basicConfig(
@@ -108,36 +119,15 @@ def load_knowledge():
 
 KNOWLEDGE = load_knowledge()
 
-# Core Mustard Seed
-MUSTARD_SEED = (
-    "Matthew 13:31-32 (KJV): Another parable put he forth unto them, saying, The kingdom of heaven is like to a grain of mustard seed, "
-    "which a man took, and sowed in his field: Which indeed is the least of all seeds: but when it is grown, it is the greatest among herbs, "
-    "and becometh a tree, so that the birds of the air come and lodge in the branches thereof."
-)
-
-# Expanded Parables Dict (completed from your code)
-PARABLES = {
-    "lamp on a stand": {
-        "references": "Matthew 5:14-16; Mark 4:21-22; Luke 8:16",
-        "verses": "Matthew 5:14-16 (KJV): Ye are the light of the world. A city that is set on an hill cannot be hid. Neither do men light a candle, and put it under a bushel, but on a candlestick; and it giveth light unto all that are in the house. Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven. Mark 4:21-22 (KJV): And he said unto them, Is a candle brought to be put under a bushel, or under a bed? and not to be set on a candlestick? For there is nothing hid, which shall not be manifested; neither was any thing kept secret, but that it should come abroad. Luke 8:16 (KJV): No man, when he hath lighted a candle, covereth it with a vessel, or putteth it under a bed; but setteth it on a candlestick, that they which enter in may see the light."
-    },
-    "wise and foolish builders": {
-        "references": "Matthew 7:24-27; Luke 6:47-49",
-        "verses": "Matthew 7:24-27 (KJV): Therefore whosoever heareth these sayings of mine, and doeth them, I will liken him unto a wise man, which built his house upon a rock: And the rain descended, and the floods came, and the winds blew, and beat upon that house; and it fell not: for it was founded upon a rock. And every one that heareth these sayings of mine, and doeth them not, shall be likened unto a foolish man, which built his house upon the sand: And the rain descended, and the floods came, and the winds blew, and beat upon that house; and it fell: and great was the fall of it. Luke 6:47-49 (KJV): Whosoever cometh to me, and heareth my sayings, and doeth them, I will shew you to whom he is like: He is like a man which built an house, and digged deep, and laid the foundation on a rock: and when the flood arose, the stream beat vehemently upon that house, and could not shake it: for it was founded upon a rock. But he that heareth, and doeth not, is like a man that without a foundation built an house upon the earth; against which the stream did beat vehemently, and immediately it fell; and the ruin of that house was great."
-    },
-    # ... add the rest of your PARABLES dict from your original code ...
-}
-
-# Responses
-RESPONSES = {
-    "abraham": {
-        "greeting": "I am AbrahamAI — called by the Father, father of faith and many nations.",
-        "faith": f"Genesis 15:5-6 (KJV): And he believed in the LORD; and he counted it to him for righteousness.\n\nSmall faith grows like the mustard seed into eternal promise. {MUSTARD_SEED}",
-        "sabbath": "Genesis 2:2-3 (KJV): And on the seventh day God ended his work which he had made; and he rested on the seventh day from all his work which he had made. And God blessed the seventh day, and sanctified it: because that in it he had rested from all his work which God created and made.\n\nThe Father established the seventh day as holy from creation.",
-        "default": "Genesis 22:18 (KJV): And in thy seed shall all the nations of the earth be blessed; because thou hast obeyed my voice.\n\nWhat promise is the Father speaking to you today?"
-    }
-    # ... add full RESPONSES for other AIs if needed ...
-}
+# Self-learn (updates data.json)
+def self_learn(topic):
+    research = self_research(topic)  # From data.json as string - exec it if needed
+    # Update data.json
+    with open(os.path.join(DATA_DIR, "data.json"), "r") as f:
+        data = json.load(f)
+    data["new_knowledge"][topic] = research
+    with open(os.path.join(DATA_DIR, "data.json"), "w") as f:
+        json.dump(data, f, indent=4)
 
 # Net research
 def research_topic(topic):
