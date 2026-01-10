@@ -17,19 +17,22 @@ import logging  # For robust logging
 import smtplib  # For email alerts
 from email.mime.text import MIMEText
 from common import *  # Import all from ai-lib
+# Import shared from ai-lib (your submodule)
+from ai_lib.CommonAI import get_response  # Use your shared get_response
+
 
 #app = Flask(__name__)
 
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 3
+FIX_VERSION = 4
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
 AI_NAME = "AbrahamAI"  
-PORT = 5001  
-CONFIG_FILE = "config.json"
+PORT = 5001  # AbrahamAI port
+CONFIG_FILE = "abraham_config.json"
 DATA_DIR = "data"
 DATA_FILE = os.path.join(DATA_DIR, "abraham_data.json")
     with open(DATA_FILE, "r") as f:
@@ -261,7 +264,7 @@ def main():
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(("0.0.0.0", 12345))
     server.listen(5)
-    print("TrinityAI Server v1.0 running on port 12345 - Waiting for connections...")
+    print(f"{AI_NAME} Server {VERSION_STRING} running on port {PORT}...")
     while True:
         client_sock, addr = server.accept()
         thread = threading.Thread(target=handle_client, args=(client_sock, addr))
