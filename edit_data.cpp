@@ -2,6 +2,12 @@
 #include <fstream>
 #include <jsoncpp/json/json.h>
 
+# Version
+int MAJOR_VERSION = 0
+int MINOR_VERSION = 1
+int FIX_VERSION = 8
+
+
 int main() {
     Json::Value data;
     std::ifstream in("data/data.json");
