@@ -23,7 +23,7 @@ from common import *  # Import all from ai-lib
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 2
+FIX_VERSION = 3
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -34,6 +34,10 @@ DATA_DIR = "data"
 DATA_FILE = os.path.join(DATA_DIR, "abraham_data.json")
     with open(DATA_FILE, "r") as f:
         DATA = json.load(f)
+
+KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
+
+VOICE_ON = True
 
 #DATA
 CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
@@ -164,6 +168,18 @@ def research_topic(topic):
 def speak(text):
     clean = text.replace('\n', ' ').replace('"', '\\"').replace("'", "\\'")
     os.system(f'espeak "{clean}" 2>/dev/null &')
+
+def get_response(query):
+    text = query.lower()
+    if "voice on" in text:
+        global VOICE_ON
+        VOICE_ON = True
+        return "Voice enabled"
+    if "voice off" in text:
+        VOICE_ON = False
+        return "Voice disabled"
+    # Your future logic here
+    return "Default Abraham response"
 
 # Your get_ai_response
 def get_ai_response(user_input):
