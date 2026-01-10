@@ -17,16 +17,18 @@ import logging  # For robust logging
 import smtplib  # For email alerts
 from email.mime.text import MIMEText
 from common import *  # Import all from ai-lib
-# Import shared from ai-lib (your submodule)
-from ai_lib.CommonAI import get_response  # Use your shared get_response
-
+# Import shared from ai-lib (submodule)
+from ai_lib.CommonAI import (
+    load_config, save_config, check_system_limits, self_research, self_update,
+    send_alert, setup_logging, get_response  
+    )
 
 #app = Flask(__name__)
 
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 4
+FIX_VERSION = 5
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -60,24 +62,12 @@ response = get_response(data, query)
 exec(DATA["get_response"])
 exec(DATA["self_research"])
 
-# Use
-setup_logging()
-CONFIG = load_config()
 
+CONFIG = load_config()
+logger = setup_logging(CONFIG)
+logger.info(f"{AI_NAME} Server {VERSION_STRING} starting...")
 if check_system_limits(CONFIG):
     # Do research...
-
-# Logging setup
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("abrahamai.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger("AbrahamAI")
-
 
 # Load config robustly
 def load_config():
@@ -147,6 +137,9 @@ def self_learn(topic):
     with open(os.path.join(DATA_DIR, "data.json"), "w") as f:
         json.dump(data, f, indent=4)
 
+if not check_system_limits(CONFIG):
+    return "System limits reached — operation skipped."
+
 # Net research
 def research_topic(topic):
     if not CONFIG["RESEARCH_ENABLED"]:
@@ -172,17 +165,9 @@ def speak(text):
     clean = text.replace('\n', ' ').replace('"', '\\"').replace("'", "\\'")
     os.system(f'espeak "{clean}" 2>/dev/null &')
 
+# Use shared from ai-lib
 def get_response(query):
-    text = query.lower()
-    if "voice on" in text:
-        global VOICE_ON
-        VOICE_ON = True
-        return "Voice enabled"
-    if "voice off" in text:
-        VOICE_ON = False
-        return "Voice disabled"
-    # Your future logic here
-    return "Default Abraham response"
+    return get_response(query)  # Calls ai-lib's get_response
 
 # Your get_ai_response
 def get_ai_response(user_input):
