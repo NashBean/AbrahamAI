@@ -19,9 +19,9 @@ from email.mime.text import MIMEText
 from common import *  # Import all from ai-lib
 # Import shared from ai-lib (submodule)
 from ai_lib.CommonAI import (
-    load_config, save_config, check_system_limits, self_research, self_update,
+    setup_logging,load_config, save_config, check_system_limits, self_research, self_update,
     send_alert, setup_logging, get_response  
-    )
+    ) 
 
 #app = Flask(__name__)
 
@@ -66,45 +66,9 @@ exec(DATA["self_research"])
 CONFIG = load_config()
 logger = setup_logging(CONFIG)
 logger.info(f"{AI_NAME} Server {VERSION_STRING} starting...")
+
 if check_system_limits(CONFIG):
-    # Do research...
-
-# Load config robustly
-def load_config():
-    try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
-    except Exception as e:
-        logger.error(f"Config load error: {e} — using defaults.")
-    default = {
-        "RESEARCH_ENABLED": False,
-        "DATA_MAX_SIZE_MB": 100,
-        "RAM_LIMIT_GB": 4,
-        "CPU_LIMIT_PERCENT": 80,
-        "DISK_MIN_FREE_GB": 5,
-        "NET_BANDWIDTH_THRESHOLD_MBPS": 1.0,
-        "NET_LATENCY_MAX_MS": 200,
-        "ALERT_EMAIL": "your_email@example.com",
-        "SMTP_SERVER": "smtp.example.com",
-        "SMTP_PORT": 587,
-        "SMTP_USER": "user",
-        "SMTP_PASS": "pass",
-        "RESEARCH_SCHEDULE": "daily",
-        "GITHUB_REPO": "NashBean/AbrahamAI",
-        "GITHUB_TOKEN": "your_github_pat_here"
-    }
-    save_config(default)
-    return default
-
-def save_config(config=None):
-    try:
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config or CONFIG, f, indent=4)
-    except Exception as e:
-        logger.error(f"Config save error: {e}")
-
-CONFIG = load_config()
+    
 
 # Data dir and knowledge file
 os.makedirs(DATA_DIR, exist_ok=True)
