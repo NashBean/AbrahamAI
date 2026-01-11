@@ -19,16 +19,15 @@ from email.mime.text import MIMEText
 from common import *  # Import all from ai-lib
 # Import shared from ai-lib (submodule)
 from ai_lib.CommonAI import (
-    setup_logging,load_config, save_config, check_system_limits, self_research, self_update,
-    send_alert, setup_logging, get_response  
+    setup_logging, load_config, save_config, check_system_limits, self_research, self_update,
+    send_alert, setup_logging, get_response, update_data
     ) 
 
 #app = Flask(__name__)
-
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 5
+FIX_VERSION = 6
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -40,9 +39,13 @@ DATA_FILE = os.path.join(DATA_DIR, "abraham_data.json")
     with open(DATA_FILE, "r") as f:
         DATA = json.load(f)
 
-KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
-
 VOICE_ON = True
+
+CONFIG = load_config()
+logger = setup_logging(CONFIG)
+logger.info(f"{AI_NAME} Server {VERSION_STRING} starting...")
+
+if check_system_limits(CONFIG):
 
 #DATA
 CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
@@ -63,13 +66,7 @@ exec(DATA["get_response"])
 exec(DATA["self_research"])
 
 
-CONFIG = load_config()
-logger = setup_logging(CONFIG)
-logger.info(f"{AI_NAME} Server {VERSION_STRING} starting...")
-
-if check_system_limits(CONFIG):
     
-
 # Data dir and knowledge file
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -93,16 +90,14 @@ KNOWLEDGE = load_knowledge()
 
 # Self-learn (updates data.json)
 def self_learn(topic):
-    research = self_research(topic)  # From data.json as string - exec it if needed
-    # Update data.json
-    with open(os.path.join(DATA_DIR, "data.json"), "r") as f:
-        data = json.load(f)
-    data["new_knowledge"][topic] = research
-    with open(os.path.join(DATA_DIR, "data.json"), "w") as f:
-        json.dump(data, f, indent=4)
+    if not CONFIG.get("RESEARCH_ENABLED", False):
+        return "Self-learn disabled."
+    if not check_system_limits(CONFIG):
+        return "System limits reached — operation skipped."
+    research = self_research(topic)  
+   update_data({"new_knowledge": {topic: research}}, DATA_FILE)  # Update abraham_data.json
+    return f"Learned '{topic}': {research}"
 
-if not check_system_limits(CONFIG):
-    return "System limits reached — operation skipped."
 
 # Net research
 def research_topic(topic):
@@ -166,7 +161,7 @@ def get_ai_response(user_input):
 def handle_client(client_socket, addr):
     print(f"Connection from {addr}")
     try:
-        welcome = f"AbrahamAI Server v1.0 - Connected! Choose: 1=AbrahamAI 2=MosesAI 3=JesusAI 4=TrinityAI\n"
+        welcome = f"AbrahamAI Server {VERSION_STRING} \n"
         client_socket.send(welcome.encode('utf-8'))
 
         current_ai = None
@@ -188,15 +183,13 @@ def handle_client(client_socket, addr):
                     return
 
                 if current_ai is None:
-                    if message in ["1", "2", "3", "4"]:
-                        ai_map = {"1": "abraham", "2": "moses", "3": "jesus", "4": "trinity"}
-                        current_ai = ai_map[message]
-                        resp = f"--- {current_ai.upper()}AI Activated ---\n{RESPONSES[current_ai]['greeting']}\n"
-                        client_socket.send(resp.encode('utf-8'))
-                        speak(RESPONSES[current_ai]['greeting'])
-                    else:
-                        client_socket.send(b"Choose 1-4 or 'exit'\n")
-                    continue
+                    if message.lower().startswith("learn "):
+                        topic = message[6:].strip()
+                        resp = self_learn(topic)
+                        full_resp = f"{current_ai.upper()}AI: {resp}\n"
+                        client_socket.send(full_resp.encode('utf-8'))
+                        speak(resp)
+                        continue
 
                 response = get_ai_response(message)
                 full_resp = f"{current_ai.upper()}AI: {response}\n"
@@ -211,7 +204,7 @@ def handle_client(client_socket, addr):
 def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(("0.0.0.0", 12345))
+    server.bind(("0.0.0.0", PORT))
     server.listen(5)
     print(f"{AI_NAME} Server {VERSION_STRING} running on port {PORT}...")
     while True:
