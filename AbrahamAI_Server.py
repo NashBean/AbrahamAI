@@ -27,7 +27,7 @@ from ai_lib.CommonAI import (
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 6
+FIX_VERSION = 7
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -95,8 +95,11 @@ def self_learn(topic):
     if not check_system_limits(CONFIG):
         return "System limits reached — operation skipped."
     research = self_research(topic)  
-   update_data({"new_knowledge": {topic: research}}, DATA_FILE)  # Update abraham_data.json
-    return f"Learned '{topic}': {research}"
+    update_data({"learned": {topic: research}}, DATA_FILE)  # From ai-lib
+    global KNOWLEDGE
+    KNOWLEDGE = load_data(DATA_FILE)  # Reload
+    logger.info(f"Self-learned: {topic}")
+    return f"Learned '{topic}': {research[:200]}..."  # Truncate for response
 
 
 # Net research
@@ -168,7 +171,7 @@ def handle_client(client_socket, addr):
         buffer = ""
 
         while True:
-            data = client_socket.recv(1024)
+            data = client_socket.recv(1024)# Import shared from ai-lib (your submodule)
             if not data:
                 break
             buffer += data.decode('utf-8', errors='ignore')
@@ -190,7 +193,6 @@ def handle_client(client_socket, addr):
                         client_socket.send(full_resp.encode('utf-8'))
                         speak(resp)
                         continue
-
                 response = get_ai_response(message)
                 full_resp = f"{current_ai.upper()}AI: {response}\n"
                 client_socket.send(full_resp.encode('utf-8'))
