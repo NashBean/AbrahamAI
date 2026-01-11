@@ -5,12 +5,12 @@
 # Version
 int MAJOR_VERSION = 0
 int MINOR_VERSION = 1
-int FIX_VERSION = 8
+int FIX_VERSION = 9
 
 
 int main() {
     Json::Value data;
-    std::ifstream in("data/data.json");
+    std::ifstream in("data/abraham_data.json");
     in >> data;
 
     // Example edit: add/update a key in PARABLES
@@ -18,7 +18,7 @@ int main() {
     data["PARABLES"]["new_parable"]["verses"] = "New verse text";
 
     // Save back
-    std::ofstream out("data/data.json");
+    std::ofstream out("data/abraham_data.json");
     out << data;
 
     std::cout << "Data edited and saved." << std::endl;

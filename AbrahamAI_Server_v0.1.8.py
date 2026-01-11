@@ -1,7 +1,242 @@
-{
+#!/usr/bin/env python3
+# AbrahamAI_Server.py - Modular AI Server with network monitoring and alerting
+# Run with: python3 AbrahamAI_Server.py
 
-  # Expanded Parables Dict (name lower: {'references': str, 'verses': str})
-  "PARABLES": {
+import socket
+import threading
+import requests
+import json
+import os
+#from flask import Flask, request, jsonify
+#from bs4 import BeautifulSoup  # For parsing web pages
+import time  # For schedule timer
+import subprocess  # For git pull/restart
+import sys
+import psutil  # For RAM monitoring
+import logging  # For robust logging
+import smtplib  # For email alerts
+from email.mime.text import MIMEText
+
+#app = Flask(__name__)
+
+# Version
+MAJOR_VERSION = 0
+MINOR_VERSION = 1
+FIX_VERSION = 8
+# Added self-update via GitHub API, research controls, config
+# Added RAM monitoring, fixed imports, self-update
+# Added disk space monitoring, logging system
+# Added network monitoring, alerting system, disk monitoring, logging
+VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
+
+#AI
+AI_NAME = "AbrahamAI"  
+PORT = 5001  
+DATA_DIR = "data"
+CONFIG_FILE = "config.json"
+
+#DATA
+CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
+JOURNEY = json.load(open(os.path.join(DATA_DIR, "abraham_journey.json"), encoding="utf-8"))
+ARCHAEOLOGY = json.load(open(os.path.join(DATA_DIR, "abraham_archaeology.json"), encoding="utf-8"))
+KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
+
+
+#-------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------
+
+
+# Logging setup
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("abrahamai.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("AbrahamAI")
+
+
+# Data dir and knowledge file
+DATA_DIR = "data"
+os.makedirs(DATA_DIR, exist_ok=True)
+KNOWLEDGE_FILE = os.path.join(DATA_DIR, "abraham_comprehensive.json")
+
+# Load knowledge robustly
+def load_knowledge():
+    try:
+        if os.path.exists(KNOWLEDGE_FILE):
+            size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
+            if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
+                logger.warning("Data size exceeded — skipping load.")
+                send_alert("Data size limit exceeded")
+                return {}
+            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Knowledge load error: {e}")
+        send_alert("Knowledge load failed")
+    return {}
+
+KNOWLEDGE = load_knowledge()
+
+# Core Mustard Seed
+MUSTARD_SEED = (
+    "Matthew 13:31-32 (KJV): Another parable put he forth unto them, saying, The kingdom of heaven is like to a grain of mustard seed, "
+    "which a man took, and sowed in his field: Which indeed is the least of all seeds: but when it is grown, it is the greatest among herbs, "
+    "and becometh a tree, so that the birds of the air come and lodge in the branches thereof."
+)
+
+# Expanded Parables Dict (completed from your code)
+PARABLES = {
+    "lamp on a stand": {
+        "references": "Matthew 5:14-16; Mark 4:21-22; Luke 8:16",
+        "verses": "Matthew 5:14-16 (KJV): Ye are the light of the world. A city that is set on an hill cannot be hid. Neither do men light a candle, and put it under a bushel, but on a candlestick; and it giveth light unto all that are in the house. Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven. Mark 4:21-22 (KJV): And he said unto them, Is a candle brought to be put under a bushel, or under a bed? and not to be set on a candlestick? For there is nothing hid, which shall not be manifested; neither was any thing kept secret, but that it should come abroad. Luke 8:16 (KJV): No man, when he hath lighted a candle, covereth it with a vessel, or putteth it under a bed; but setteth it on a candlestick, that they which enter in may see the light."
+    },
+    "wise and foolish builders": {
+        "references": "Matthew 7:24-27; Luke 6:47-49",
+        "verses": "Matthew 7:24-27 (KJV): Therefore whosoever heareth these sayings of mine, and doeth them, I will liken him unto a wise man, which built his house upon a rock: And the rain descended, and the floods came, and the winds blew, and beat upon that house; and it fell not: for it was founded upon a rock. And every one that heareth these sayings of mine, and doeth them not, shall be likened unto a foolish man, which built his house upon the sand: And the rain descended, and the floods came, and the winds blew, and beat upon that house; and it fell: and great was the fall of it. Luke 6:47-49 (KJV): Whosoever cometh to me, and heareth my sayings, and doeth them, I will shew you to whom he is like: He is like a man which built an house, and digged deep, and laid the foundation on a rock: and when the flood arose, the stream beat vehemently upon that house, and could not shake it: for it was founded upon a rock. But he that heareth, and doeth not, is like a man that without a foundation built an house upon the earth; against which the stream did beat vehemently, and immediately it fell; and the ruin of that house was great."
+    },
+    # ... add the rest of your PARABLES dict from your original code ...
+}
+
+# Responses
+RESPONSES = {
+    "abraham": {
+        "greeting": "I am AbrahamAI — called by the Father, father of faith and many nations.",
+        "faith": f"Genesis 15:5-6 (KJV): And he believed in the LORD; and he counted it to him for righteousness.\n\nSmall faith grows like the mustard seed into eternal promise. {MUSTARD_SEED}",
+        "sabbath": "Genesis 2:2-3 (KJV): And on the seventh day God ended his work which he had made; and he rested on the seventh day from all his work which he had made. And God blessed the seventh day, and sanctified it: because that in it he had rested from all his work which God created and made.\n\nThe Father established the seventh day as holy from creation.",
+        "default": "Genesis 22:18 (KJV): And in thy seed shall all the nations of the earth be blessed; because thou hast obeyed my voice.\n\nWhat promise is the Father speaking to you today?"
+    }
+    # ... add full RESPONSES for other AIs if needed ...
+}
+
+# Net research
+def research_topic(topic):
+    if not CONFIG["RESEARCH_ENABLED"]:
+        return "Research disabled."
+    if not check_system_limits():
+        return "System limits reached — research skipped."
+    try:
+        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exintro=&titles={topic.replace(' ', '_')}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        pages = data["query"]["pages"]
+        page_id = list(pages.keys())[0]
+        if page_id != "-1":
+            return pages[page_id]["extract"]
+        return "No research found."
+    except Exception as e:
+        logger.error(f"Research error: {e}")
+        return f"Research failed: {e}"
+
+# Voice function
+def speak(text):
+    clean = text.replace('\n', ' ').replace('"', '\\"').replace("'", "\\'")
+    os.system(f'espeak "{clean}" 2>/dev/null &')
+
+# Your get_ai_response
+def get_ai_response(user_input):
+    text = user_input.lower()
+    # Voice toggle
+    global VOICE_ON
+    if "voice on" in text:
+        VOICE_ON = True
+        return "Voice output enabled."
+    if "voice off" in text:
+        VOICE_ON = False
+        return "Voice output disabled."
+    # Parable detection
+    for parable_name in PARABLES:
+        if parable_name in text:
+            p = PARABLES[parable_name]
+            return f"Parable of {parable_name.capitalize()} - {p['references']}\n\nFull Verses: {p['verses']}\n\nThe Father's wisdom revealed through the Son, empowered by the Spirit."
+    # Other keywords
+    if any(word in text for word in ["faith", "mustard", "seed", "believ"]):
+        return RESPONSES.get("faith", RESPONSES["default"])
+    if any(word in text for word in ["sabbath", "sabath", "holy day", "seventh day", "rest day", "keep holy", "saturday"]):
+        return RESPONSES.get("sabbath", RESPONSES["default"])
+    if any(word in text for word in ["sower", "seeds", "soil", "path", "rock", "thorn"]):
+        return RESPONSES.get("sower", RESPONSES["default"])
+    if "parable" in text:
+        return RESPONSES.get("parable", RESPONSES["default"])
+    if any(word in text for word in ["fulfill", "prophecy", "law and prophets", "messiah"]):
+        return RESPONSES.get("fulfill", RESPONSES["default"])
+    return RESPONSES["default"]
+
+# Handle client
+def handle_client(client_socket, addr):
+    print(f"Connection from {addr}")
+    try:
+        welcome = f"AbrahamAI Server v1.0 - Connected! Choose: 1=AbrahamAI 2=MosesAI 3=JesusAI 4=TrinityAI\n"
+        client_socket.send(welcome.encode('utf-8'))
+
+        current_ai = None
+        buffer = ""
+
+        while True:
+            data = client_socket.recv(1024)
+            if not data:
+                break
+            buffer += data.decode('utf-8', errors='ignore')
+
+            while '\n' in buffer:
+                line, buffer = buffer.split('\n', 1)
+                message = line.strip()
+                if not message:
+                    continue
+                if message.lower() == "exit":
+                    client_socket.send(b"Grace and peace - until next time!\n")
+                    return
+
+                if current_ai is None:
+                    if message in ["1", "2", "3", "4"]:
+                        ai_map = {"1": "abraham", "2": "moses", "3": "jesus", "4": "trinity"}
+                        current_ai = ai_map[message]
+                        resp = f"--- {current_ai.upper()}AI Activated ---\n{RESPONSES[current_ai]['greeting']}\n"
+                        client_socket.send(resp.encode('utf-8'))
+                        speak(RESPONSES[current_ai]['greeting'])
+                    else:
+                        client_socket.send(b"Choose 1-4 or 'exit'\n")
+                    continue
+
+                response = get_ai_response(message)
+                full_resp = f"{current_ai.upper()}AI: {response}\n"
+                client_socket.send(full_resp.encode('utf-8'))
+                speak(response)
+    except:
+        pass
+    finally:
+        client_socket.close()
+        print(f"Disconnected: {addr}")
+
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("0.0.0.0", 12345))
+    server.listen(5)
+    print("TrinityAI Server v1.0 running on port 12345 - Waiting for connections...")
+    while True:
+        client_sock, addr = server.accept()
+        thread = threading.Thread(target=handle_client, args=(client_sock, addr))
+        thread.start()
+
+
+
+#-------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------
+
+# Core Mustard Seed
+MUSTARD_SEED = (
+    "Matthew 13:31-32 (KJV): Another parable put he forth unto them, saying, The kingdom of heaven is like to a grain of mustard seed, "
+    "which a man took, and sowed in his field: Which indeed is the least of all seeds: but when it is grown, it is the greatest among herbs, "
+    "and becometh a tree, so that the birds of the air come and lodge in the branches thereof."
+)
+
+# Expanded Parables Dict (name lower: {'references': str, 'verses': str})
+PARABLES = {
     "lamp on a stand": {
         "references": "Matthew 5:14-16; Mark 4:21-22; Luke 8:16",
         "verses": "Matthew 5:14-16 (KJV): Ye are the light of the world. A city that is set on an hill cannot be hid. Neither do men light a candle, and put it under a bushel, but on a candlestick; and it giveth light unto all that are in the house. Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven. Mark 4:21-22 (KJV): And he said unto them, Is a candle brought to be put under a bushel, or under a bed? and not to be set on a candlestick? For there is nothing hid, which shall not be manifested; neither was any thing kept secret, but that it should come abroad. Luke 8:16 (KJV): No man, when he hath lighted a candle, covereth it with a vessel, or putteth it under a bed; but setteth it on a candlestick, that they which enter in may see the light."
@@ -174,16 +409,429 @@
         "references": "Luke 18:9-14",
         "verses": "Luke 18:9-14 (KJV): And he spake this parable unto certain which trusted in themselves that they were righteous, and despised others: Two men went up into the temple to pray; the one a Pharisee, and the other a publican. The Pharisee stood and prayed thus with himself, God, I thank thee, that I am not as other men are, extortioners, unjust, adulterers, or even as this publican. I fast twice in the week, I give tithes of all that I possess. And the publican, standing afar off, would not lift up so much as his eyes unto heaven, but smote upon his breast, saying, God be merciful to me a sinner. I tell you, this man went down to his house justified rather than the other: for every one that exalteth himself shall be abased; and he that humbleth himself shall be exalted."
     },
-  },
+    # Add more parables here if needed - this covers the main ones from sources. Expand as we iterate!
+}
 
-  "RESPONSES": {
-   "greeting": "I am AbrahamAI — called by the Father, father of faith and many nations.",
-        "faith": f"Genesis 15:5-6 (KJV): And he believed in the LORD; and he counted it to him for righteousness.\n\nSmall faith grows like the mustard seed into eternal promise. {MUSTARD_SEED}",
+# Responses (expanded for parables)
+RESPONSES = {
+        "faith": f"Genesis 15:5-6 (KJV): And he brought him forth abroad, and said, Look now toward heaven, and tell the stars, if thou be able to number them: and he said unto him, So shall thy seed be. And he believed in the LORD; and he counted it to him for righteousness.\n\nSmall faith grows like the mustard seed into eternal promise. {MUSTARD_SEED}",
         "sabbath": "Genesis 2:2-3 (KJV): And on the seventh day God ended his work which he had made; and he rested on the seventh day from all his work which he had made. And God blessed the seventh day, and sanctified it: because that in it he had rested from all his work which God created and made.\n\nThe Father established the seventh day as holy from creation.",
         "default": "Genesis 22:18 (KJV): And in thy seed shall all the nations of the earth be blessed; because thou hast obeyed my voice.\n\nWhat promise is the Father speaking to you today?"
-   }     
+    }
 
-    "get_response": "def get_ai_response(ai, user_input):\n    text = user_input.lower()\n    # Voice toggle\n    global VOICE_ON\n    if \"voice on\" in text:\n        VOICE_ON = True\n        return \"Voice output enabled.\"\n    if \"voice off\" in text:\n        VOICE_ON = False\n        return \"Voice output disabled.\"\n    # Parable detection\n    for parable_name in PARABLES:\n        if parable_name in text:\n            p = PARABLES[parable_name]\n            return f\"Parable of {parable_name.capitalize()} - {p['references']}\\n\\nFull Verses: {p['verses']}\\n\\nThe Father's wisdom revealed through the Son, empowered by the Spirit.\"\n    # Other keywords\n    if any(word in text for word in [\"faith\", \"mustard\", \"seed\", \"believ\"]):\n        return RESPONSES[ai].get(\"faith\", RESPONSES[ai][\"default\"])\n    if any(word in text for word in [\"sabbath\", \"sabath\", \"holy day\", \"seventh day\", \"rest day\", \"keep holy\", \"saturday\"]):\n        return RESPONSES[ai].get(\"sabbath\", RESPONSES[ai][\"default\"])\n    if any(word in text for word in [\"sower\", \"seeds\", \"soil\", \"path\", \"rock\", \"thorn\"]):\n        return RESPONSES[ai].get(\"sower\", RESPONSES[ai][\"default\"])\n    if \"parable\" in text:\n        return RESPONSES[ai].get(\"parable\", RESPONSES[ai][\"default\"])\n    if any(word in text for word in [\"fulfill\", \"prophecy\", \"law and prophets\", \"messiah\"]):\n        return RESPONSES[ai].get(\"fulfill\", RESPONSES[ai][\"default\"])\n    return RESPONSES[ai][\"default\"]",
-    "self_research": "def self_research(topic):\n    try:\n        # Wikipedia API for research\n        url = f\"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exintro=&titles={topic.replace(' ', '_')}\"\n        resp = requests.get(url, timeout=10)\n        resp.raise_for_status()\n        data = resp.json()\n        pages = data[\"query\"][\"pages\"]\n        page_id = list(pages.keys())[0]\n        if page_id != \"-1\":\n            return pages[page_id][\"extract\"]\n        return \"No research found.\"\n    except Exception as e:\n        return f\"Research failed: {e}\""
+#--- added \/ 
 
-}
+# Logging setup (file + console)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("abrahamai.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("AbrahamAI")
+
+# Load knowledge
+def load_knowledge():
+    try:
+        if os.path.exists(KNOWLEDGE_FILE):
+            size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
+            if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
+                logger.warning("Data size exceeded — skipping load.")
+                return {}
+            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Knowledge load error: {e}")
+    return {}
+
+KNOWLEDGE = load_knowledge()
+
+# Net research
+def research_topic(topic):
+    if not CONFIG["RESEARCH_ENABLED"]:
+        return "Research disabled."
+    if not check_system_limits():
+        return "System limits reached — research skipped."
+    try:
+        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exintro=&titles={topic.replace(' ', '_')}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        pages = data["query"]["pages"]
+        page_id = list(pages.keys())[0]
+        if page_id != "-1":
+            return pages[page_id]["extract"]
+        return "No research found."
+    except Exception as e:
+        logger.error(f"Research error: {e}")
+        send_alert("Research operation failed")
+        return f"Research failed: {e}"
+
+# System limits check (RAM + CPU + Disk + Net)
+def check_system_limits():
+    # RAM
+    used_ram_gb = psutil.virtual_memory().used / (1024 ** 3)
+    if used_ram_gb > CONFIG["RAM_LIMIT_GB"]:
+        logger.warning(f"RAM {used_ram_gb:.2f}GB > limit {CONFIG['RAM_LIMIT_GB']}GB")
+        send_alert("RAM limit exceeded")
+        return False
+
+    # CPU
+    cpu_percent = psutil.cpu_percent(interval=1)
+    if cpu_percent > CONFIG["CPU_LIMIT_PERCENT"]:
+        logger.warning(f"CPU {cpu_percent}% > limit {CONFIG['CPU_LIMIT_PERCENT']}%")
+        send_alert("CPU limit exceeded")
+        return False
+
+    # Disk
+    disk = psutil.disk_usage('/')
+    free_gb = disk.free / (1024 ** 3)
+    if free_gb < CONFIG["DISK_MIN_FREE_GB"]:
+        logger.warning(f"Free disk {free_gb:.2f}GB < limit {CONFIG['DISK_MIN_FREE_GB']}GB")
+        send_alert("Disk space low")
+        return False
+
+    # Network (new: bandwidth and latency)
+    if not check_network():
+        return False
+
+    return True
+
+# GitHub self-update
+def check_self_update():
+    if not check_system_limits():
+        return "System limits reached — update skipped."
+    try:
+        owner, repo = CONFIG["GITHUB_REPO"].split("/")
+        url = f"https://api.github.com/repos/{owner}/{repo}/commits/main"
+        headers = {"Authorization": f"Bearer {CONFIG['GITHUB_TOKEN']}"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        head_sha = resp.json()["sha"]
+        base_sha = get_local_sha()
+        if base_sha != head_sha:
+            pull_changes()
+            safe_restart()
+            return "Updated and restarted."
+        return "Up to date."
+    except Exception as e:
+        logger.error(f"Update error: {e}")
+        send_alert(f"Self-update failed: {e}")
+        return f"Update failed: {e}"
+
+# Alerting system (email)
+def send_alert(message):
+    try:
+        msg = MIMEText(message)
+        msg["Subject"] = "AbrahamAI Alert"
+        msg["From"] = CONFIG["SMTP_USER"]
+        msg["To"] = CONFIG["ALERT_EMAIL"]
+
+        server = smtplib.SMTP(CONFIG["SMTP_SERVER"], CONFIG["SMTP_PORT"])
+        server.starttls()
+        server.login(CONFIG["SMTP_USER"], CONFIG["SMTP_PASS"])
+        server.sendmail(CONFIG["SMTP_USER"], CONFIG["ALERT_EMAIL"], msg.as_string())
+        server.quit()
+        logger.info("Alert sent.")
+    except Exception as e:
+        logger.error(f"Alert send error: {e}")
+
+# Network monitoring (new)
+def check_network():
+    # Bandwidth (net_io counters over 1 sec)
+    net_start = psutil.net_io_counters()
+    time.sleep(1)
+    net_end = psutil.net_io_counters()
+    bytes_sent = net_end.bytes_sent - net_start.bytes_sent
+    bytes_recv = net_end.bytes_recv - net_start.bytes_recv
+    bandwidth_mbps = ((bytes_sent + bytes_recv) / 1024 / 1024) * 8  # Mbps approximate
+    if bandwidth_mbps < CONFIG["NET_BANDWIDTH_THRESHOLD_MBPS"]:
+        logger.warning(f"Bandwidth {bandwidth_mbps:.2f}Mbps < limit {CONFIG['NET_BANDWIDTH_THRESHOLD_MBPS']}Mbps")
+        send_alert("Low bandwidth detected")
+        return False
+
+    # Latency (ping to Google DNS)
+    try:
+        output = subprocess.check_output(["ping", "-c", "1", "8.8.8.8"]).decode()
+        latency_ms = float(output.split("time=")[1].split(" ms")[0])
+        if latency_ms > CONFIG["NET_LATENCY_MAX_MS"]:
+            logger.warning(f"Latency {latency_ms}ms > limit {CONFIG['NET_LATENCY_MAX_MS']}ms")
+            send_alert("High latency detected")
+            return False
+    except Exception as e:
+        logger.error(f"Latency check error: {e}")
+        send_alert("Network latency check failed")
+        return False
+
+    return True
+
+ef get_local_sha():
+    return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
+
+def pull_changes():
+    subprocess.check_output(["git", "pull"], stderr=subprocess.STDOUT)
+
+def safe_restart():
+    print("Restarting...")
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+# Scheduler thread
+def scheduler():
+    while True:
+        if CONFIG["RESEARCH_SCHEDULE"] == "none":
+            time.sleep(3600)  # Check hourly anyway
+            continue
+        interval = 86400 if CONFIG["RESEARCH_SCHEDULE"] == "daily" else 3600  # hourly
+        check_self_update()
+        time.sleep(interval)
+
+
+# Knowledge file
+KNOWLEDGE_FILE = os.path.join("data", "abraham_comprehensive.json")
+
+# Update knowledge
+def update_knowledge(key, value):
+    global KNOWLEDGE
+    try:
+        KNOWLEDGE[key] = value
+        with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
+            json.dump(KNOWLEDGE, f, indent=4)
+        logger.info("Knowledge updated.")
+    except Exception as e:
+        logger.error(f"Update knowledge error: {e}")
+        send_alert("Knowledge update failed")
+
+# Load knowledge
+def load_knowledge():
+    try:
+        if os.path.exists(KNOWLEDGE_FILE):
+            size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
+            if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
+                logger.warning("Data size exceeded — skipping load.")
+                send_alert("Data size limit exceeded")
+                return {}
+            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Knowledge load error: {e}")
+        send_alert("Knowledge load failed")
+    return {}
+
+KNOWLEDGE = load_knowledge()
+
+# Load config
+def load_config():
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Config load error: {e} — using defaults.")
+    default = {
+        "RESEARCH_ENABLED": False,
+        "DATA_MAX_SIZE_MB": 100,
+        "RAM_LIMIT_GB": 4,
+        "CPU_LIMIT_PERCENT": 80,
+        "DISK_MIN_FREE_GB": 5,  # New: Minimum free disk space
+        "NET_BANDWIDTH_THRESHOLD_MBPS": 1.0,  # New: Min bandwidth for operations
+        "NET_LATENCY_MAX_MS": 200,  # New: Max latency for operations
+        "ALERT_EMAIL": "your_email@example.com",  # New: Email for alerts
+        "SMTP_SERVER": "smtp.example.com",  # New: SMTP for alerting
+        "SMTP_PORT": 587,
+        "SMTP_USER": "user",
+        "SMTP_PASS": "pass",
+        "RESEARCH_SCHEDULE": "daily",
+        "GITHUB_REPO": "NashBean/AbrahamAI",
+        "GITHUB_TOKEN": "your_github_pat_here"
+    }
+    save_config(default)
+    return default
+
+def save_config(config=None):
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config or CONFIG, f, indent=4)
+    except Exception as e:
+        logger.error(f"Config save error: {e}")
+
+CONFIG = load_config()
+
+
+
+# Net research (only if enabled)
+def research_topic(topic):
+    if not CONFIG["RESEARCH_ENABLED"]:
+        return "Research disabled."
+    # Your research code...
+
+# GitHub self-update
+def check_self_update():
+    try:
+        owner, repo = CONFIG["GITHUB_REPO"].split("/")
+        base_sha = get_local_sha()  # Implement: subprocess.run(["git", "rev-parse", "HEAD"])
+        head_sha = get_remote_sha(owner, repo)
+        if base_sha != head_sha:
+            print("Updates available — pulling...")
+            pull_changes()
+            save_local_sha(head_sha)
+            safe_restart()
+            return "Updated to latest version."
+        return "Up to date."
+    except Exception as e:
+        return f"Update failed: {e}"
+
+def get_remote_sha(owner, repo):
+    url = f"https://api.github.com/repos/{owner}/{repo}/git/refs/heads/main"
+    headers = {"Authorization": f"Bearer {CONFIG['GITHUB_TOKEN']}"}
+    resp = requests.get(url, headers=headers)
+    return resp.json()["object"]["sha"]
+
+def pull_changes():
+    subprocess.run(["git", "pull"], check=True)
+
+def safe_restart():
+    print("Restarting safely...")
+    os.execv(sys.executable, [sys.executable] + sys.argv)  # Restart Python process
+
+# Schedule research/update (background thread)
+def scheduler():
+    while True:
+        if CONFIG["RESEARCH_SCHEDULE"] != "none":
+            # Run research or update on schedule
+            print("Scheduled check...")
+            check_self_update()
+        time.sleep(86400 if CONFIG["RESEARCH_SCHEDULE"] == "daily" else 3600)  # 24h or 1h
+
+threading.Thread(target=scheduler, daemon=True).start()
+
+def handle_client(client_socket, addr):
+    print(f"Connection from {addr}")
+
+    try:
+        welcome = f"AbrahamAI Server {VERSION_STRING} - Connected!\nType query or 'research [topic]' to learn.\n> "
+        client_socket.send(welcome.encode('utf-8'))
+
+        buffer = ""
+
+        while True:
+            data = client_socket.recv(1024)
+            if not data:
+                break
+            buffer += data.decode('utf-8', errors='ignore')
+
+            while '\n' in buffer:
+                line, buffer = buffer.split('\n', 1)
+                message = line.strip()
+                if not message:
+                    continue
+                if message.lower() == "exit":
+                    client_socket.send("Grace and peace - until next time!\n".encode('utf-8'))
+                    return
+                if message.lower().startswith("set "):
+                    parts = message.split()
+                    if len(parts) > 2:
+                        key = parts[1].upper()
+                        value = ' '.join(parts[2:])
+                        if key in CONFIG:
+                            CONFIG[key] = type(CONFIG[key])(value)  # Cast to original type
+                            save_config()
+                            resp = f"Setting {key} updated to {value}\n> "
+                        else:
+                            resp = f"Unknown setting: {key}\n> "
+                        client_socket.send(resp.encode('utf-8'))
+                    continue
+
+                # New: Handle research command
+                if message.lower().startswith("research "):
+                    topic = message[9:].strip()
+                    research_result = research_topic(topic)
+                    update_knowledge(topic, research_result)  # Self-learn
+                    KNOWLEDGE = load_knowledge()  # Reload
+                    resp = f"Researched '{topic}': {research_result}\nKnowledge updated!\n> "
+                else:
+                    resp = f"AbrahamAI: {get_response(message)}\n> "
+
+                client_socket.send(resp.encode('utf-8'))
+    finally:
+        client_socket.close()
+        print(f"Disconnected: {addr}")
+
+
+# New: Net research function
+def research_topic(topic):
+    try:
+        # Example: Wikipedia API for historical info
+        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exintro=&titles={topic.replace(' ', '_')}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        pages = data["query"]["pages"]
+        page_id = list(pages.keys())[0]
+        if page_id != "-1":
+            summary = pages[page_id]["extract"]
+            # Clean HTML
+            soup = BeautifulSoup(summary, 'html.parser')
+            clean_text = soup.get_text()
+            return clean_text
+        return "No research found."
+    except Exception as e:
+        return f"Research failed: {e}"
+
+
+def get_response(query):
+    q = query.lower().strip()
+
+    for name in PARABLES:
+        if name in q:
+            return f"Parable of {name.capitalize()}: {PARABLES[name]}"
+    if "faith" in q or "mustard" in q or "seed" in q:
+        return RESPONSES["faith"]
+    if "sabbath" in q or "seventh" in q or "saturday" in q:
+        return RESPONSES["sabbath"]
+    if "well" in q:
+        return KNOWLEDGE.get("archaeology", {}).get("beer_sheba_well", "No info yet")
+    if "ur" in q or "chaldees" in q or "culture" in q or "idol" in q:
+        return f"Culture in Ur: {CULTURE['ur_of_chaldees']}\n\nCall: {CULTURE['call']}"
+    if "journey" in q or "route" in q or "land" in q or "travel" in q:
+        return f"Journey route: {JOURNEY['route']}\n\nKey people: {JOURNEY['people']}"
+    if "archaeology" in q or "well" in q or "beer-sheba" in q or "dig" in q or "excavation" in q:
+        return f"Beer-sheba well: {ARCHAEOLOGY['beer_sheba_well']}\n\nUr excavations: {ARCHAEOLOGY['ur']}\n\nTimeline match: {ARCHAEOLOGY['timeline']}"
+    return RESPONSES["default"]
+
+
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("0.0.0.0", 5001))
+    server.listen(10)
+    print(f"AbrahamAI Server {VERSION_STRING} running on port 5001...")
+    while True:
+        try:
+            client_sock, addr = server.accept()
+            thread = threading.Thread(target=handle_client, args=(client_sock, addr))
+            thread.start()
+        except KeyboardInterrupt:
+            print("\nShutdown...")
+            break
+
+@app.route("/")
+def home():
+    return jsonify({"ai": AI_NAME, "status": "ready"})
+
+@app.route("/ask", methods=["POST"])
+def ask():
+    data = request.json or {}
+    query = data.get("query", "")
+    if not query:
+        return jsonify({"error": "No query"}), 400
+    response = get_response(query)
+    return jsonify({"ai": AI_NAME, "response": response})
+
+if __name__ == "__main__":
+    print(f"{AI_NAME} {VERSION_STRING} server running on port {PORT}...")
+    app.run(host="0.0.0.0", port=PORT, debug=False)
+    logger.info(f"Starting {AI_NAME}_Server {VERSION_STRING}")
+    main()
+

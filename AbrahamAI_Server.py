@@ -27,7 +27,7 @@ from ai_lib.CommonAI import (
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 7
+FIX_VERSION = 8
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -36,8 +36,6 @@ PORT = 5001  # AbrahamAI port
 CONFIG_FILE = "abraham_config.json"
 DATA_DIR = "data"
 DATA_FILE = os.path.join(DATA_DIR, "abraham_data.json")
-    with open(DATA_FILE, "r") as f:
-        DATA = json.load(f)
 
 VOICE_ON = True
 
