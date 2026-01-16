@@ -27,10 +27,12 @@ from ai_lib.CommonAI import (
     get_response
     )
 
+from ai_lib.bdh_wrapper import load_bdh_model, bdh_generate, bdh_self_learn
+
 # Version
 MAJOR_VERSION = 0
-MINOR_VERSION = 2
-FIX_VERSION = 10
+MINOR_VERSION = 3
+FIX_VERSION = 0
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -62,36 +64,16 @@ data = load_data()
 response = get_response(data, query)
 
 # Load knowledge robustly
-def load_knowledge():
-    try:
-        if os.path.exists(KNOWLEDGE_FILE):
-            size_mb = os.path.getsize(KNOWLEDGE_FILE) / (1024 * 1024)
-            if size_mb > CONFIG["DATA_MAX_SIZE_MB"]:
-                logger.warning("Data size exceeded — skipping load.")
-                send_alert("Data size limit exceeded")
-                return {}
-            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception as e:
-        logger.error(f"Knowledge load error: {e}")
-        send_alert("Knowledge load failed")
-    return {}
-
-KNOWLEDGE = load_knowledge()
+KNOWLEDGE = load_data(DATA_FILE)
+BDH_MODEL = load_bdh_model(DATA_FILE)  # Train/load on your data.json
 
 # Self-learn (updates {AI_Name}_data.json)
 def self_learn(topic):
-    if not CONFIG.get("RESEARCH_ENABLED", False):
-        return "Self-learn disabled."
-    if not check_system_limits(CONFIG):
-        return "System limits reached — operation skipped."
-    research = self_research(topic)  
-    update_data({"learned": {topic: research}}, DATA_FILE)  # From ai-lib
-    global KNOWLEDGE
-    KNOWLEDGE = load_data(DATA_FILE)  # Reload
-    logger.info(f"Self-learned: {topic}")
-    return f"Learned '{topic}': {research[:200]}..."  # Truncate for response
-
+    research = self_research(topic)  # From ai-lib
+    update_data({"learned": {topic: research}}, DATA_FILE)
+    bdh_self_learn(BDH_MODEL, topic, KNOWLEDGE)  # Update BDH model
+    KNOWLEDGE = load_data(DATA_FILE)
+    return f"Learned '{topic}' via BDH: {research[:200]}..."
 
 # Net research
 def research_topic(topic):
@@ -120,7 +102,9 @@ def speak(text):
 
 # Use shared from ai-lib
 def get_response(query):
-    return get_response(query)  # Calls ai-lib's get_response
+    # Use BDH for deep response
+    prompt = f"Explain {query} in context of Abraham's faith: {KNOWLEDGE.get(q, '')}"
+    return bdh_generate(BDH_MODEL, prompt)    
 
 # Your get_ai_response
 def get_ai_response(user_input):
