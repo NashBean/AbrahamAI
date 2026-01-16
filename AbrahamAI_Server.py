@@ -28,11 +28,12 @@ from ai_lib.CommonAI import (
     )
 
 from ai_lib.bdh_wrapper import load_bdh_model, bdh_generate, bdh_self_learn
+from ai_lib.pathway_bdh_wrapper import pathway_bdh_self_learn
 
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 3
-FIX_VERSION = 0
+FIX_VERSION = 1
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -67,13 +68,21 @@ response = get_response(data, query)
 KNOWLEDGE = load_data(DATA_FILE)
 BDH_MODEL = load_bdh_model(DATA_FILE)  # Train/load on your data.json
 
+# In get_response (use BDH for deep responses)
+def get_response(query):
+    prompt = f"Explain {query} in {AI_NAME}'s context: {KNOWLEDGE.get(q, '')}"
+    return bdh_generate(BDH_MODEL, prompt)
+
 # Self-learn (updates {AI_Name}_data.json)
 def self_learn(topic):
     research = self_research(topic)  # From ai-lib
     update_data({"learned": {topic: research}}, DATA_FILE)
     bdh_self_learn(BDH_MODEL, topic, KNOWLEDGE)  # Update BDH model
+    pathway_bdh_self_learn(DATA_FILE, topic)  # Stream data + train BDH
     KNOWLEDGE = load_data(DATA_FILE)
     return f"Learned '{topic}' via BDH: {research[:200]}..."
+
+bdh_self_learn(BDH_MODEL, topic, research)
 
 # Net research
 def research_topic(topic):
@@ -103,43 +112,17 @@ def speak(text):
 # Use shared from ai-lib
 def get_response(query):
     # Use BDH for deep response
-    prompt = f"Explain {query} in context of Abraham's faith: {KNOWLEDGE.get(q, '')}"
-    return bdh_generate(BDH_MODEL, prompt)    
+    prompt = f"Explain {query} in context of AbrahamAI's faith: {KNOWLEDGE.get(q, '')}"
+    app = LLMApp()
+    pathway_response = app(prompt)
+    return pathway_response    
 
-# Your get_ai_response
-def get_ai_response(user_input):
-    text = user_input.lower()
-    # Voice toggle
-    global VOICE_ON
-    if "voice on" in text:
-        VOICE_ON = True
-        return "Voice output enabled."
-    if "voice off" in text:
-        VOICE_ON = False
-        return "Voice output disabled."
-    # Parable detection
-    for parable_name in PARABLES:
-        if parable_name in text:
-            p = PARABLES[parable_name]
-            return f"Parable of {parable_name.capitalize()} - {p['references']}\n\nFull Verses: {p['verses']}\n\nThe Father's wisdom revealed through the Son, empowered by the Spirit."
-    # Other keywords
-    if any(word in text for word in ["faith", "mustard", "seed", "believ"]):
-        return RESPONSES.get("faith", RESPONSES["default"])
-    if any(word in text for word in ["sabbath", "sabath", "holy day", "seventh day", "rest day", "keep holy", "saturday"]):
-        return RESPONSES.get("sabbath", RESPONSES["default"])
-    if any(word in text for word in ["sower", "seeds", "soil", "path", "rock", "thorn"]):
-        return RESPONSES.get("sower", RESPONSES["default"])
-    if "parable" in text:
-        return RESPONSES.get("parable", RESPONSES["default"])
-    if any(word in text for word in ["fulfill", "prophecy", "law and prophets", "messiah"]):
-        return RESPONSES.get("fulfill", RESPONSES["default"])
-    return RESPONSES["default"]
 
 # Handle client
 def handle_client(client_socket, addr):
     print(f"Connection from {addr}")
     try:
-        welcome = f"AbrahamAI Server {VERSION_STRING} \n"
+        welcome = f"{AI_NAME} Server {VERSION_STRING} \n"
         client_socket.send(welcome.encode('utf-8'))
 
         current_ai = None
