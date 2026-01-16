@@ -6,10 +6,11 @@ import socket
 import threading
 import requests
 import json
-import os
 import time  # For schedule timer
 import subprocess  # For git pull/restart
 import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ai-lib')))
 import psutil  # For system monitoring (RAM, CPU, Disk, Net)
 import logging  # For robust logging
 import smtplib  # For email alerts
@@ -29,7 +30,7 @@ from ai_lib.CommonAI import (
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 9
+FIX_VERSION = 10
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -41,10 +42,10 @@ DATA_FILE = os.path.join(DATA_DIR, "abraham_data.json")
 
 VOICE_ON = True
 
-CONFIG = load_config()
+# Setup shared from ai-lib
+CONFIG = load_config()  # Uses your config.json
 logger = setup_logging(CONFIG)
-logger.info(f"{AI_NAME} Server {VERSION_STRING} starting...")
-
+logger.info(f"{AI_NAME} - {VERSION_STRING} starting with ai-lib integration")
 
 #DATA
 CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
@@ -59,14 +60,6 @@ RESPONSES = DATA["RESPONSES"]
 
 data = load_data()
 response = get_response(data, query)
-
-# Load functions as strings and exec (safe in your context)
-exec(DATA["get_responsesexec(DATA["self_research"])
-
-
-    
-# Data dir and knowledge file
-os.makedirs(DATA_DIR, exist_ok=True)
 
 # Load knowledge robustly
 def load_knowledge():
@@ -182,7 +175,6 @@ def handle_client(client_socket, addr):
                 if message.lower() == "exit":
                     client_socket.send(b"Grace and peace - until next time!\n")
                     return
-
                 if current_ai is None:
                     if message.lower().startswith("learn "):
                         topic = message[6:].strip()
