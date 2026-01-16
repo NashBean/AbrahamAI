@@ -7,27 +7,29 @@ import threading
 import requests
 import json
 import os
-#from flask import Flask, request, jsonify
-#from bs4 import BeautifulSoup  # For parsing web pages
 import time  # For schedule timer
 import subprocess  # For git pull/restart
 import sys
 import psutil  # For system monitoring (RAM, CPU, Disk, Net)
 import logging  # For robust logging
 import smtplib  # For email alerts
-from email.mime.text import MIMEText
-from common import *  # Import all from ai-lib
-# Import shared from ai-lib (submodule)
-from ai_lib.CommonAI import (
-    setup_logging, load_config, save_config, check_system_limits, self_research, self_update,
-    send_alert, setup_logging, get_response, update_data
-    ) 
 
-#app = Flask(__name__)
+# Import shared from ai-lib (your submodule)
+from ai_lib.CommonAI import (
+    get_version, 
+    load_config, # save_config,
+    setup_logging, logger,
+    load_data, update_data, send_alert,
+    check_system_limits,  
+    self_research, self_update,
+    understand_language, get_culture, speak,
+    get_response
+    )
+
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 2
-FIX_VERSION = 8
+FIX_VERSION = 9
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -43,7 +45,6 @@ CONFIG = load_config()
 logger = setup_logging(CONFIG)
 logger.info(f"{AI_NAME} Server {VERSION_STRING} starting...")
 
-if check_system_limits(CONFIG):
 
 #DATA
 CULTURE = json.load(open(os.path.join(DATA_DIR, "abraham_culture.json"), encoding="utf-8"))
@@ -60,8 +61,7 @@ data = load_data()
 response = get_response(data, query)
 
 # Load functions as strings and exec (safe in your context)
-exec(DATA["get_response"])
-exec(DATA["self_research"])
+exec(DATA["get_responsesexec(DATA["self_research"])
 
 
     
@@ -86,7 +86,7 @@ def load_knowledge():
 
 KNOWLEDGE = load_knowledge()
 
-# Self-learn (updates data.json)
+# Self-learn (updates {AI_Name}_data.json)
 def self_learn(topic):
     if not CONFIG.get("RESEARCH_ENABLED", False):
         return "Self-learn disabled."
