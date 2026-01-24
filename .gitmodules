@@ -1,0 +1,3 @@
+[submodule "ai-lib"]
+	path = ai-lib
+	url = https://github.com/NashBean/ai-lib.git

@@ -7,12 +7,29 @@ app = Flask(__name__)
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 1
-FIX_VERSION = 1
+FIX_VERSION = 8
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 CORS(app, origins="https://chat.openai.com")
+# -*- coding: utf-8 -*-
+from flask import Flask, jsonify, request, send_file
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app, origins="https://chat.openai.com")
 
 _TODOS = {}
+
+# Embedded knowledge base for "self-learning" about Abraham
+ABRAHAM_KNOWLEDGE = """
+Abraham's Path: Born ~2000 BCE in Ur (Iraq), migrated to Haran (Turkey), called to Canaan at 75: Shechem, Bethel, Negev, Egypt (famine), back to Hebron/Mamre, Beersheba, Gerar, Moriah. Buried in Machpelah Cave (Hebron).
+God's Influence: Called from polytheism; promises of land/descendants/blessings (Gen 12-17); covenants (circumcision, stars/sand); tested faith (sacrifice Isaac, stopped); righteousness by belief.
+Tribes: Encountered Canaanites, Hittites, Amorites, Philistines; founded Israelites (Isaac/Jacob's 12 Tribes), Ishmaelites (Arabs), Edomites (Esau), Midianites (Keturah).
+Languages/Birthplace: Ur - Sumerian/Akkadian (cuneiform clay tablets for laws/hymns); spoke early Aramaic/Akkadian, adopted Proto-Hebrew in Canaan.
+Landmarks: Ur Ziggurat, Harran ruins, Shechem (Tell Balata), Bethel (Beitin), Hebron Tomb, Beersheba well, Tel Dan Gate, Mount Moriah (Temple Mount).
+Customs/Beliefs: Monotheism (one God, no idols); hospitality, altars/sacrifices, circumcision, tithing, endogamy, faith/obedience.
+Archaeology: Middle Bronze Age; Ur tombs (Woolley), Nuzi tablets (customs), Ebla archives (names), Tel Dan inscription; no direct proof, but Amorite migrations align.
+"""
 
 @app.route("/todos/<string:username>", methods=["POST"])
 def add_todo(username):
@@ -38,9 +55,9 @@ def delete_todo(username):
 def abraham():
     data = request.get_json(force=True)
     query = data.get("query", "What is faith?")
-    wisdom = ("My child, I am Abraham. The Lord called me out of Ur with only a promise, "
-              "and I went. Concerning '" + query + "' - if God is for you, who can be against you? "
-              "Step forth; the stars bear witness to His faithfulness.")
+    # "Self-learned" response: Use knowledge base
+    wisdom = (f"My child, I am Abraham, called by the Lord from Ur. Concerning '{query}': "
+              f"{ABRAHAM_KNOWLEDGE} Step forth in faith; the covenant endures.")
     return jsonify({"reply": wisdom})
 
 @app.route("/logo.png")

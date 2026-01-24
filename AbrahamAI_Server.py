@@ -10,12 +10,11 @@ import time  # For schedule timer
 import subprocess  # For git pull/restart
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ai-lib')))
 import psutil  # For system monitoring (RAM, CPU, Disk, Net)
 import logging  # For robust logging
 import smtplib  # For email alerts
 
-# Import shared from ai-lib (your submodule)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'ai_lib')))
 from ai_lib.CommonAI import (
     get_version, 
     load_config, # save_config,
@@ -33,7 +32,7 @@ from ai_lib.pathway_bdh_wrapper import pathway_bdh_self_learn
 # Version
 MAJOR_VERSION = 0
 MINOR_VERSION = 3
-FIX_VERSION = 1
+FIX_VERSION = 3
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 #AI
@@ -142,6 +141,21 @@ def handle_client(client_socket, addr):
                 if message.lower() == "exit":
                     client_socket.send(b"Grace and peace - until next time!\n")
                     return
+                if message.lower().startswith("learn "):
+                    topic = message[6:].strip()
+                    if check_system_limits(CONFIG):
+                        research = self_research(topic)
+                        update_data({"learned": {topic: research}}, DATA_FILE)
+                        global KNOWLEDGE
+                        KNOWLEDGE = load_data(DATA_FILE)
+                        resp = f"Learned '{topic}': {research[:200]}..."
+                    else:
+                        resp = "System limits reached — learn skipped."
+                full_resp = f"{current_ai.upper()}AI: {resp}\n> "
+                client_socket.send(full_resp.encode('utf-8'))
+                speak(resp)
+                continue
+
                 if current_ai is None:
                     if message.lower().startswith("learn "):
                         topic = message[6:].strip()
