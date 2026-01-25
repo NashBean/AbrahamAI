@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# AbrahamAI v0.3.1 - 700707-word max DB, editable by user/Grok/AI, local persistence, OpenAI self-learn
+# AbrahamAI v0.3.2 - Config file for variables, 700707-word max DB, editable by user/Grok/AI, local persistence, OpenAI self-learn
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 import os
@@ -10,7 +10,7 @@ import openai  # For self-learn (optional)
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 3
-FIX_VERSION = 1
+FIX_VERSION = 2
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 AI_NAME = "AbrahamAI"
@@ -21,13 +21,37 @@ DB_FILE = f"{AI_NAME}.db"  # Editable DB
 EDIT_KEY = "777"  # Simple private password for edits (change for security)
 MAX_WORDS = 700707  # Enforce limit
 
+app = Flask(__name__)
+CORS(app, origins="https://chat.openai.com")
+
+_TODOS = {}
+_TODOS_FILE = "todos.json"  # Local todo save (not in config, as it's fixed)
+
+# Load config from abrahamai.config (fallbacks if missing)
+CONFIG_FILE = "abrahamai.config"
+config = {
+    "db_file": "abrahamai.db",
+    "edit_key": "777",
+    "max_words": 700707,
+    "port": 5004,
+    "prophet": "abraham",
+    "endpoint": "/abraham"
+}
+if os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE, "r") as f:
+        config.update(json.load(f))
+
+DB_FILE = config["db_file"]
+EDIT_KEY = config["edit_key"]
+MAX_WORDS = config["max_words"]
+
 # Init/load DB
 conn = sqlite3.connect(DB_FILE)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY, prophet TEXT UNIQUE, content TEXT)''')
-# Insert initial large knowledge if not exists (777k words placeholder from tools – fetched + padded)
-initial_abraham = "Expanded Abraham knowledge from Bible/-sources: [Full 777k-word content here – fetched details on path, God, tribes, languages, landmarks, customs, archaeology, repeated for size]." * 12963  # ~777k words (adjust multiplier)
-c.execute("INSERT OR IGNORE INTO knowledge (prophet, content) VALUES (?, ?)", ("abraham", initial_abraham))
+# Insert initial if not exists (your 777k content, trimmed if over)
+initial_abraham = "Your full Abraham knowledge here – from previous expansions."  # Paste your 777k text; code trims below
+c.execute("INSERT OR IGNORE INTO knowledge (prophet, content) VALUES (?, ?)", (config["prophet"], initial_abraham))
 conn.commit()
 conn.close()
 
@@ -54,7 +78,7 @@ def update_knowledge(prophet, new_content, append=True):
     # Enforce max words (trim oldest if over)
     words = updated.split()
     if len(words) > MAX_WORDS:
-        updated = " ".join(words[-MAX_WORDS:])  # Keep newest
+        updated = " ".join(words[-MAX_WORDS:])
     c.execute("INSERT OR REPLACE INTO knowledge (prophet, content) VALUES (?, ?)", (prophet, updated))
     conn.commit()
     conn.close()
@@ -92,12 +116,12 @@ def delete_todo(username):
     except Exception:
         return "Bad request", 400
 
-@app.route("/abraham", methods=["POST"])
+@app.route(config["endpoint"], methods=["POST"])
 def abraham():
     try:
         data = request.get_json(force=True)
         query = data.get("query", "What is faith?").strip()
-        knowledge = get_knowledge("abraham")
+        knowledge = get_knowledge(config["prophet"])
         # Base response with full DB knowledge
         reply = (
             f"My child, I am Abraham, called by the Most High from Ur of the Chaldees. "
@@ -118,7 +142,7 @@ def abraham():
             reply = response.choices[0].message["content"].strip()
             # AI self-edits: Append new insight to DB (limit enforced)
             new_insight = "New AI-generated insight: " + reply[:1000]
-            update_knowledge("abraham", new_insight)
+            update_knowledge(config["prophet"], new_insight)
         return jsonify({"reply": reply})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -129,7 +153,7 @@ def update_knowledge_route():
         data = request.get_json(force=True)
         if data.get("key") != EDIT_KEY:
             return "Invalid key", 403
-        prophet = data.get("prophet", "abraham")
+        prophet = data.get("prophet", config["prophet"])
         new_content = data.get("new_content", "")
         append = data.get("append", True)
         update_knowledge(prophet, new_content, append)
@@ -163,4 +187,4 @@ def openapi_spec():
     return "OpenAPI spec not found", 404
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5004, debug=True)
+    app.run(host="0.0.0.0", port=config["port"], debug=True)
