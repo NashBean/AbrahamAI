@@ -12,9 +12,8 @@ MAJOR_VERSIOM = 0
 MINOR_VERSION = 3
 FIX_VERSION = 0
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
-_TODOS = {}
-AI_NAME = "AbrahamAI"
 
+AI_NAME = "AbrahamAI"
 
 app = Flask(__name__)
 CORS(app, origins="https://chat.openai.com")
