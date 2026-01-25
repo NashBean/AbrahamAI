@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# AbrahamAI v0.3.0 - 777k-word DB, editable by user/Grok/AI, local persistence, OpenAI self-learn
+# AbrahamAI v0.3.1 - 700707-word max DB, editable by user/Grok/AI, local persistence, OpenAI self-learn
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 import os
@@ -10,19 +10,16 @@ import openai  # For self-learn (optional)
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 3
-FIX_VERSION = 0
+FIX_VERSION = 1
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 AI_NAME = "AbrahamAI"
 
-app = Flask(__name__)
-CORS(app, origins="https://chat.openai.com")
-
-#------------------------------------------------------------
 _TODOS = {}
 _TODOS_FILE = f"{AI_NAME}_todos.json"  # Local todo save
 DB_FILE = f"{AI_NAME}.db"  # Editable DB
 EDIT_KEY = "777"  # Simple private password for edits (change for security)
+MAX_WORDS = 700707  # Enforce limit
 
 # Init/load DB
 conn = sqlite3.connect(DB_FILE)
@@ -48,12 +45,16 @@ def get_knowledge(prophet):
     conn.close()
     return result[0] if result else ""
 
-# Helper to update knowledge in DB (appends or replaces)
+# Helper to update knowledge in DB (appends or replaces, enforces max words)
 def update_knowledge(prophet, new_content, append=True):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     current = get_knowledge(prophet)
     updated = current + " " + new_content if append else new_content
+    # Enforce max words (trim oldest if over)
+    words = updated.split()
+    if len(words) > MAX_WORDS:
+        updated = " ".join(words[-MAX_WORDS:])  # Keep newest
     c.execute("INSERT OR REPLACE INTO knowledge (prophet, content) VALUES (?, ?)", (prophet, updated))
     conn.commit()
     conn.close()
@@ -115,8 +116,8 @@ def abraham():
                 temperature=0.7
             )
             reply = response.choices[0].message["content"].strip()
-            # AI self-edits: Append new insight to DB
-            new_insight = "New AI-generated insight: " + reply[:1000]  # Truncate to avoid overflow
+            # AI self-edits: Append new insight to DB (limit enforced)
+            new_insight = "New AI-generated insight: " + reply[:1000]
             update_knowledge("abraham", new_insight)
         return jsonify({"reply": reply})
     except Exception as e:
@@ -163,5 +164,3 @@ def openapi_spec():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5004, debug=True)
-#-------------------------------------------------------------
-
