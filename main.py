@@ -9,7 +9,7 @@ from ai_lib.common import load_config, get_knowledge, update_knowledge, init_db,
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 3
-FIX_VERSION = 3
+FIX_VERSION = 4
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 AI_NAME = "AbrahamAI"
@@ -40,7 +40,6 @@ config = load_config(CONFIG_FILE, config_defaults)
 
 # Init DB with initial content (your 777k, trimmed if over)
 
-initial_jesus = "Expanded Jesus knowledge from Bible/sources: Full life biography (Britannica/Wikipedia: birth Bethlehem ~6-4 BCE, Nazareth upbringing, baptism John, ministry Galilee/Judea, teachings Kingdom of God, miracles healings/exorcisms, crucifixion Pilate ~30 CE, resurrection). Deep parables (GotQuestions/Christianity.com: Prodigal Son meaning grace/forgiveness Luke 15:11-32 [full analysis: lost son squanders, repents, father restores vs older brother's bitterness, theological mercy vs self-righteousness, cultural Jewish family dynamics, historical 1st-c. context]; Sower Mark 4:3-20 soils/hearts response to gospel; Mustard Seed Matthew 13:31-32 kingdom growth; Lost Sheep Luke 15:3-7 God's pursuit; Good Samaritan Luke 10:25-37 mercy to outsiders; Talents Matthew 25:14-30 stewardship; and all 40+ with meanings, contexts, insights). Influences (Jewish law, Roman rule, apocalyptic traditions), teachings (ethics/love/justice), customs (Sabbath, festivals, Torah), languages (Aramaic/Hebrew/Greek), historical/archaeological evidence (Josephus/Tacitus mentions, Nazareth/Capernaum digs, Merneptah Stele Israel link, no direct artifacts but 1st-c. context). [Repeated for size]." * 12963  # ~777k words
 init_db(config["db_file"], config["prophet"], initial_abraham)
 
 # Load todos
