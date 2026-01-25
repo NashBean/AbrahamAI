@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
-# AbrahamAI v0.3.2 - Config file for variables, 700707-word max DB, editable by user/Grok/AI, local persistence, OpenAI self-learn
+# AbrahamAI v0.3.3 - Uses shared ai_lib/common.py, 700707-word max DB, editable by user/Grok/AI, local persistence, OpenAI self-learn
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 import os
-import json
-import sqlite3
 import openai  # For self-learn (optional)
+from ai_lib.common import load_config, get_knowledge, update_knowledge, init_db, load_todos, save_todos, log_message
 
 # Version
 MAJOR_VERSIOM = 0
 MINOR_VERSION = 3
-FIX_VERSION = 2
+FIX_VERSION = 3
 VERSION_STRING = f"v{MAJOR_VERSION}.{MINOR_VERSION}.{FIX_VERSION}"
 
 AI_NAME = "AbrahamAI"
+
+app = Flask(__name__)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+CORS(app, origins="https://chat.openai.com")
 
 _TODOS = {}
 _TODOS_FILE = f"{AI_NAME}_todos.json"  # Local todo save
@@ -21,72 +24,27 @@ DB_FILE = f"{AI_NAME}.db"  # Editable DB
 EDIT_KEY = "777"  # Simple private password for edits (change for security)
 MAX_WORDS = 700707  # Enforce limit
 
-app = Flask(__name__)
-CORS(app, origins="https://chat.openai.com")
-
-_TODOS = {}
-_TODOS_FILE = "todos.json"  # Local todo save (not in config, as it's fixed)
 
 # Load config from abrahamai.config (fallbacks if missing)
 CONFIG_FILE = "abrahamai.config"
 config = {
-    "db_file": "abrahamai.db",
+    "db_file": f"{AI_NAME}.db",
     "edit_key": "777",
     "max_words": 700707,
     "port": 5004,
     "prophet": "abraham",
     "endpoint": "/abraham"
 }
-if os.path.exists(CONFIG_FILE):
-    with open(CONFIG_FILE, "r") as f:
-        config.update(json.load(f))
 
-DB_FILE = config["db_file"]
-EDIT_KEY = config["edit_key"]
-MAX_WORDS = config["max_words"]
+config = load_config(CONFIG_FILE, config_defaults)
 
-# Init/load DB
-conn = sqlite3.connect(DB_FILE)
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY, prophet TEXT UNIQUE, content TEXT)''')
-# Insert initial if not exists (your 777k content, trimmed if over)
-initial_abraham = "Your full Abraham knowledge here – from previous expansions."  # Paste your 777k text; code trims below
-c.execute("INSERT OR IGNORE INTO knowledge (prophet, content) VALUES (?, ?)", (config["prophet"], initial_abraham))
-conn.commit()
-conn.close()
+# Init DB with initial content (your 777k, trimmed if over)
 
-# Load todos from local file on start
-if os.path.exists(_TODOS_FILE):
-    with open(_TODOS_FILE, "r") as f:
-        _TODOS = json.load(f)
+initial_jesus = "Expanded Jesus knowledge from Bible/sources: Full life biography (Britannica/Wikipedia: birth Bethlehem ~6-4 BCE, Nazareth upbringing, baptism John, ministry Galilee/Judea, teachings Kingdom of God, miracles healings/exorcisms, crucifixion Pilate ~30 CE, resurrection). Deep parables (GotQuestions/Christianity.com: Prodigal Son meaning grace/forgiveness Luke 15:11-32 [full analysis: lost son squanders, repents, father restores vs older brother's bitterness, theological mercy vs self-righteousness, cultural Jewish family dynamics, historical 1st-c. context]; Sower Mark 4:3-20 soils/hearts response to gospel; Mustard Seed Matthew 13:31-32 kingdom growth; Lost Sheep Luke 15:3-7 God's pursuit; Good Samaritan Luke 10:25-37 mercy to outsiders; Talents Matthew 25:14-30 stewardship; and all 40+ with meanings, contexts, insights). Influences (Jewish law, Roman rule, apocalyptic traditions), teachings (ethics/love/justice), customs (Sabbath, festivals, Torah), languages (Aramaic/Hebrew/Greek), historical/archaeological evidence (Josephus/Tacitus mentions, Nazareth/Capernaum digs, Merneptah Stele Israel link, no direct artifacts but 1st-c. context). [Repeated for size]." * 12963  # ~777k words
+init_db(config["db_file"], config["prophet"], initial_abraham)
 
-# Helper to get knowledge from DB
-def get_knowledge(prophet):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT content FROM knowledge WHERE prophet = ?", (prophet,))
-    result = c.fetchone()
-    conn.close()
-    return result[0] if result else ""
-
-# Helper to update knowledge in DB (appends or replaces, enforces max words)
-def update_knowledge(prophet, new_content, append=True):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    current = get_knowledge(prophet)
-    updated = current + " " + new_content if append else new_content
-    # Enforce max words (trim oldest if over)
-    words = updated.split()
-    if len(words) > MAX_WORDS:
-        updated = " ".join(words[-MAX_WORDS:])
-    c.execute("INSERT OR REPLACE INTO knowledge (prophet, content) VALUES (?, ?)", (prophet, updated))
-    conn.commit()
-    conn.close()
-
-# Save todos to local file after changes
-def save_todos():
-    with open(_TODOS_FILE, "w") as f:
-        json.dump(_TODOS, f)
+# Load todos
+_TODOS = load_todos("todos.json")
 
 @app.route("/todos/<string:username>", methods=["POST"])
 def add_todo(username):
@@ -95,7 +53,7 @@ def add_todo(username):
         if username not in _TODOS:
             _TODOS[username] = []
         _TODOS[username].append(data.get("todo", ""))
-        save_todos()  # Persist locally
+        save_todos("todos.json", _TODOS)  # Persist locally
         return "OK", 200
     except Exception:
         return "Bad request", 400
@@ -111,7 +69,7 @@ def delete_todo(username):
         todo_idx = data.get("todo_idx")
         if isinstance(todo_idx, int) and username in _TODOS and 0 <= todo_idx < len(_TODOS[username]):
             _TODOS[username].pop(todo_idx)
-            save_todos()  # Persist locally
+            save_todos("todos.json", _TODOS)  # Persist locally
         return "OK", 200
     except Exception:
         return "Bad request", 400
@@ -121,7 +79,7 @@ def abraham():
     try:
         data = request.get_json(force=True)
         query = data.get("query", "What is faith?").strip()
-        knowledge = get_knowledge(config["prophet"])
+        knowledge = get_knowledge(config["db_file"], config["prophet"])
         # Base response with full DB knowledge
         reply = (
             f"My child, I am Abraham, called by the Most High from Ur of the Chaldees. "
@@ -142,21 +100,24 @@ def abraham():
             reply = response.choices[0].message["content"].strip()
             # AI self-edits: Append new insight to DB (limit enforced)
             new_insight = "New AI-generated insight: " + reply[:1000]
-            update_knowledge(config["prophet"], new_insight)
+            update_knowledge(config["db_file"], config["prophet"], new_content=new_insight, max_words=config["max_words"])
+            log_message(f"AbrahamAI self-learned on query: {query}")
         return jsonify({"reply": reply})
     except Exception as e:
+        log_message(f"Error in /abraham: {str(e)}")
         return jsonify({"error": str(e)}), 400
 
 @app.route("/update_knowledge", methods=["POST"])
 def update_knowledge_route():
     try:
         data = request.get_json(force=True)
-        if data.get("key") != EDIT_KEY:
+        if data.get("key") != config["edit_key"]:
             return "Invalid key", 403
         prophet = data.get("prophet", config["prophet"])
         new_content = data.get("new_content", "")
         append = data.get("append", True)
-        update_knowledge(prophet, new_content, append)
+        update_knowledge(config["db_file"], prophet, new_content, config["max_words"], append)
+        log_message(f"Knowledge updated for {prophet}")
         return "Knowledge updated", 200
     except Exception:
         return "Bad request", 400
@@ -166,6 +127,7 @@ def plugin_logo():
     logo_path = "logo.png"
     if os.path.exists(logo_path):
         return send_file(logo_path, mimetype="image/png")
+    log_message("Logo not found")
     return "Logo not found", 404
 
 @app.route("/.well-known/ai-plugin.json")
@@ -175,6 +137,7 @@ def plugin_manifest():
         with open(manifest_path, encoding="utf-8") as f:
             text = f.read()
         return text, 200, {"Content-Type": "application/json"}
+    log_message("Manifest not found")
     return "Manifest not found", 404
 
 @app.route("/openapi.yaml")
@@ -184,6 +147,7 @@ def openapi_spec():
         with open(yaml_path, encoding="utf-8") as f:
             text = f.read()
         return text, 200, {"Content-Type": "text/yaml"}
+    log_message("OpenAPI spec not found")
     return "OpenAPI spec not found", 404
 
 if __name__ == "__main__":
